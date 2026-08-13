@@ -22,3 +22,17 @@ def estimate_storage(size_go, storage_type, rates):
 
 def normalize_model(name):
     return " ".join(name.lower().split())
+
+
+def estimate_component(model, category, ebay_search_fn, reference_table):
+    prices = ebay_search_fn(model, category)
+    if prices:
+        value = median_price(prices)
+        return {"value": value, "method": f"médiane sur {len(prices)} annonces eBay"}
+
+    normalized_input = normalize_model(model)
+    for known_model, value in reference_table.get(category, {}).items():
+        if normalize_model(known_model) == normalized_input:
+            return {"value": value, "method": "table de référence"}
+
+    return None

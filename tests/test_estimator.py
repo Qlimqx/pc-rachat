@@ -51,3 +51,43 @@ def test_normalize_model_lowercases_and_strips():
 
 def test_normalize_model_collapses_internal_whitespace():
     assert normalize_model("Ryzen   5    3600") == "ryzen 5 3600"
+
+
+from estimator import estimate_component
+
+REFERENCE = {
+    "cpu": {"i5-10400": 55},
+    "gpu": {"gtx 1660": 110},
+}
+
+
+def test_estimate_component_uses_ebay_median_when_available():
+    def fake_ebay_search(model, category):
+        return [50.0, 55.0, 60.0]
+
+    result = estimate_component("i5-10400", "cpu", fake_ebay_search, REFERENCE)
+    assert result == {"value": 55.0, "method": "médiane sur 3 annonces eBay"}
+
+
+def test_estimate_component_falls_back_to_reference_table_when_ebay_empty():
+    def fake_ebay_search(model, category):
+        return []
+
+    result = estimate_component("i5-10400", "cpu", fake_ebay_search, REFERENCE)
+    assert result == {"value": 55, "method": "table de référence"}
+
+
+def test_estimate_component_reference_lookup_is_normalized():
+    def fake_ebay_search(model, category):
+        return []
+
+    result = estimate_component("  I5-10400  ", "cpu", fake_ebay_search, REFERENCE)
+    assert result == {"value": 55, "method": "table de référence"}
+
+
+def test_estimate_component_returns_none_when_unknown_everywhere():
+    def fake_ebay_search(model, category):
+        return []
+
+    result = estimate_component("unknown-cpu-9999", "cpu", fake_ebay_search, REFERENCE)
+    assert result is None
