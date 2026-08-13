@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -71,6 +72,14 @@ def make_ebay_search_fn(client_id, client_secret):
 
 
 def main():
+    # On Windows, stdout is sometimes attached to a legacy codepage (e.g. cp1252)
+    # instead of UTF-8 — particularly when output is piped/redirected. Without
+    # this, printing characters like "⚠" or "€" raises UnicodeEncodeError and
+    # crashes the CLI. Force UTF-8 output when the stream supports reconfiguring.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     load_dotenv()
     client_id = os.environ.get("EBAY_CLIENT_ID")
     client_secret = os.environ.get("EBAY_CLIENT_SECRET")
