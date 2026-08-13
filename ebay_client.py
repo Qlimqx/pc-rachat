@@ -20,9 +20,10 @@ def get_access_token(client_id, client_secret):
 
 
 USED_CONDITION_IDS = "3000|4000|5000|6000"
+NEW_CONDITION_IDS = "1000"
 
 
-def search_used_prices(query, token, limit=20):
+def _search_by_condition(query, token, condition_ids, limit=20):
     response = requests.get(
         BROWSE_SEARCH_URL,
         headers={
@@ -31,7 +32,7 @@ def search_used_prices(query, token, limit=20):
         },
         params={
             "q": query,
-            "filter": f"conditionIds:{{{USED_CONDITION_IDS}}}",
+            "filter": f"conditionIds:{{{condition_ids}}}",
             "limit": limit,
         },
         timeout=10,
@@ -41,9 +42,25 @@ def search_used_prices(query, token, limit=20):
     return [float(item["price"]["value"]) for item in data.get("itemSummaries", [])]
 
 
+def search_used_prices(query, token, limit=20):
+    return _search_by_condition(query, token, USED_CONDITION_IDS, limit)
+
+
+def search_new_prices(query, token, limit=20):
+    return _search_by_condition(query, token, NEW_CONDITION_IDS, limit)
+
+
 def search_component_price(model, category, client_id, client_secret):
     try:
         token = get_access_token(client_id, client_secret)
         return search_used_prices(f"{model} {category}", token)
     except Exception:
         return None
+
+
+def search_new_pc_prices(cpu_model, gpu_model, client_id, client_secret):
+    try:
+        token = get_access_token(client_id, client_secret)
+        return search_new_prices(f"{cpu_model} {gpu_model} PC", token)
+    except Exception:
+        return []

@@ -102,3 +102,48 @@ def test_search_component_price_returns_none_on_search_failure(mock_token, mock_
     result = search_component_price("gtx 1660", "gpu", "id", "secret")
 
     assert result is None
+
+
+from ebay_client import search_new_prices, search_new_pc_prices
+
+
+@patch("ebay_client.requests.get")
+def test_search_new_prices_uses_new_condition_filter(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "itemSummaries": [{"price": {"value": "1400.00", "currency": "EUR"}}]
+    }
+    mock_get.return_value = mock_response
+
+    prices = search_new_prices("Ryzen 7 5700X RTX 4060 PC", "token123")
+
+    assert prices == [1400.00]
+    _, kwargs = mock_get.call_args
+    assert "1000" in kwargs["params"]["filter"]
+
+
+@patch("ebay_client.search_new_prices")
+@patch("ebay_client.get_access_token")
+def test_search_new_pc_prices_returns_prices_on_success(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = [1400.0, 1420.0]
+
+    result = search_new_pc_prices("Ryzen 7 5700X", "RTX 4060", "id", "secret")
+
+    assert result == [1400.0, 1420.0]
+    mock_search.assert_called_once_with("Ryzen 7 5700X RTX 4060 PC", "tok")
+
+
+@patch("ebay_client.get_access_token", side_effect=Exception("network error"))
+def test_search_new_pc_prices_returns_empty_list_on_token_failure(mock_token):
+    result = search_new_pc_prices("Ryzen 7 5700X", "RTX 4060", "id", "secret")
+    assert result == []
+
+
+@patch("ebay_client.search_new_prices", side_effect=Exception("timeout"))
+@patch("ebay_client.get_access_token")
+def test_search_new_pc_prices_returns_empty_list_on_search_failure(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    result = search_new_pc_prices("Ryzen 7 5700X", "RTX 4060", "id", "secret")
+    assert result == []
