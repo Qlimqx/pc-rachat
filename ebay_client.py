@@ -39,3 +39,11 @@ def search_used_prices(query, token, limit=20):
     response.raise_for_status()
     data = response.json()
     return [float(item["price"]["value"]) for item in data.get("itemSummaries", [])]
+
+
+def search_component_price(model, category, client_id, client_secret):
+    try:
+        token = get_access_token(client_id, client_secret)
+        return search_used_prices(f"{model} {category}", token)
+    except Exception:
+        return None

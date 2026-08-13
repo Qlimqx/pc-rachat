@@ -70,3 +70,35 @@ def test_search_used_prices_sends_marketplace_and_condition_filters(mock_get):
     _, kwargs = mock_get.call_args
     assert kwargs["headers"]["X-EBAY-C-MARKETPLACE-ID"] == "EBAY_FR"
     assert "conditionIds" in kwargs["params"]["filter"]
+
+
+from ebay_client import search_component_price
+
+
+@patch("ebay_client.search_used_prices")
+@patch("ebay_client.get_access_token")
+def test_search_component_price_returns_prices_on_success(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = [50.0, 60.0]
+
+    result = search_component_price("i5-10400", "cpu", "id", "secret")
+
+    assert result == [50.0, 60.0]
+    mock_search.assert_called_once_with("i5-10400 cpu", "tok")
+
+
+@patch("ebay_client.get_access_token", side_effect=Exception("network error"))
+def test_search_component_price_returns_none_on_token_failure(mock_token):
+    result = search_component_price("i5-10400", "cpu", "id", "secret")
+
+    assert result is None
+
+
+@patch("ebay_client.search_used_prices", side_effect=Exception("timeout"))
+@patch("ebay_client.get_access_token")
+def test_search_component_price_returns_none_on_search_failure(mock_token, mock_search):
+    mock_token.return_value = "tok"
+
+    result = search_component_price("gtx 1660", "gpu", "id", "secret")
+
+    assert result is None
