@@ -109,3 +109,10 @@ def estimate_buy_grid(new_pc_price, tiers):
             "is_last": index == len(tiers) - 1,
         })
     return grid
+
+
+def estimate_resale_target(new_pc_price, resale_config):
+    return {
+        "min": _round2(new_pc_price * resale_config["min_pct"]),
+        "max": _round2(new_pc_price * resale_config["max_pct"]),
+    }

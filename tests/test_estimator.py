@@ -234,3 +234,16 @@ def test_estimate_buy_grid_rounds_to_two_decimals():
     assert result == [
         {"max_price": 414.59, "emoji": "🔥", "label": "Très bonne affaire", "is_last": True}
     ]
+
+
+from estimator import estimate_resale_target
+
+
+def test_estimate_resale_target_computes_min_and_max():
+    result = estimate_resale_target(1000.0, {"min_pct": 0.60, "max_pct": 0.68})
+    assert result == {"min": 600.0, "max": 680.0}
+
+
+def test_estimate_resale_target_rounds_to_two_decimals():
+    result = estimate_resale_target(999.0, {"min_pct": 0.601, "max_pct": 0.677})
+    assert result == {"min": 600.4, "max": 676.32}
