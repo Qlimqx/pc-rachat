@@ -40,3 +40,14 @@ def test_estimate_storage_known_type():
 
 def test_estimate_storage_unknown_type_returns_none():
     assert estimate_storage(512, "zip-disk", RATES) is None
+
+
+from estimator import normalize_model
+
+
+def test_normalize_model_lowercases_and_strips():
+    assert normalize_model("  Intel Core i5-10400  ") == "intel core i5-10400"
+
+
+def test_normalize_model_collapses_internal_whitespace():
+    assert normalize_model("Ryzen   5    3600") == "ryzen 5 3600"

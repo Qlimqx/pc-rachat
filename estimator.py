@@ -18,3 +18,7 @@ def estimate_ram(size_go, ram_type, rates):
 
 def estimate_storage(size_go, storage_type, rates):
     return _estimate_by_rate(size_go, storage_type, rates, "storage")
+
+
+def normalize_model(name):
+    return " ".join(name.lower().split())
