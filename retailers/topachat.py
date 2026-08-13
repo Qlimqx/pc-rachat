@@ -1,5 +1,3 @@
-import json
-
 import requests
 
 # TopAchat's storefront (a SvelteKit app) renders search results client-side,
@@ -36,7 +34,7 @@ def search_prices(cpu_model, gpu_model):
             SEARCH_URL, params={"terms": query}, headers=HEADERS, timeout=10
         )
         response.raise_for_status()
-        data = json.loads(response.text)
+        data = response.json()
 
         prices = []
         categories = data["result"]["document"]["categories"]

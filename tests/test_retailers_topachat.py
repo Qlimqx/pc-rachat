@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch, Mock
 
 from retailers.topachat import search_prices
@@ -16,7 +17,7 @@ def test_search_prices_extracts_prices_from_real_fixture(mock_get):
 
     mock_response = Mock()
     mock_response.status_code = 200
-    mock_response.text = html
+    mock_response.json.return_value = json.loads(html)
     mock_get.return_value = mock_response
 
     prices = search_prices("Ryzen 7 5700X", "RTX 4060")
@@ -35,7 +36,7 @@ def test_search_prices_returns_empty_list_on_network_failure(mock_get):
 def test_search_prices_returns_empty_list_on_unparseable_html(mock_get):
     mock_response = Mock()
     mock_response.status_code = 200
-    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_response.json.side_effect = ValueError("not json")
     mock_get.return_value = mock_response
 
     assert search_prices("Ryzen 7 5700X", "RTX 4060") == []
