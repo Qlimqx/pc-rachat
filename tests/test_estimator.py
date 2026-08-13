@@ -167,3 +167,41 @@ def test_estimate_pc_flags_missing_components():
     assert result["missing"] == ["cpu", "gpu"]
     assert result["breakdown"]["cpu"] is None
     assert result["total"] == 32.0 + 25.6
+
+
+from estimator import estimate_new_pc_price
+
+
+def test_estimate_new_pc_price_aggregates_multiple_sources():
+    def source_a(cpu_model, gpu_model):
+        return [1400.0, 1420.0]
+
+    def source_b(cpu_model, gpu_model):
+        return [1380.0]
+
+    def source_c_found_nothing(cpu_model, gpu_model):
+        return []
+
+    result = estimate_new_pc_price(
+        "Ryzen 7 5700X", "RTX 4060", [source_a, source_b, source_c_found_nothing]
+    )
+
+    assert result == {"value": 1400.0, "method": "médiane sur 3 annonces neuves"}
+
+
+def test_estimate_new_pc_price_returns_none_when_all_sources_empty():
+    def empty_source(cpu_model, gpu_model):
+        return []
+
+    result = estimate_new_pc_price("unknown-cpu", "unknown-gpu", [empty_source, empty_source])
+
+    assert result is None
+
+
+def test_estimate_new_pc_price_works_with_a_single_source():
+    def only_source(cpu_model, gpu_model):
+        return [999.0]
+
+    result = estimate_new_pc_price("cpu", "gpu", [only_source])
+
+    assert result == {"value": 999.0, "method": "médiane sur 1 annonces neuves"}

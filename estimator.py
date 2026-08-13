@@ -74,3 +74,17 @@ def estimate_pc(
     total = sum(r["value"] for r in breakdown.values() if r is not None)
 
     return {"breakdown": breakdown, "total": round(total, 2), "missing": missing}
+
+
+def estimate_new_pc_price(cpu_model, gpu_model, search_fns):
+    all_prices = []
+    for search_fn in search_fns:
+        all_prices.extend(search_fn(cpu_model, gpu_model))
+
+    if not all_prices:
+        return None
+
+    return {
+        "value": median_price(all_prices),
+        "method": f"médiane sur {len(all_prices)} annonces neuves",
+    }
