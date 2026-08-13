@@ -1,6 +1,6 @@
 from unittest.mock import patch, Mock
 
-from ebay_client import get_access_token
+from ebay_client import get_access_token, search_used_prices
 
 
 @patch("ebay_client.requests.post")
@@ -27,3 +27,46 @@ def test_get_access_token_raises_on_http_error(mock_post):
         assert False, "expected an exception"
     except Exception as e:
         assert "401" in str(e)
+
+
+@patch("ebay_client.requests.get")
+def test_search_used_prices_extracts_prices(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "itemSummaries": [
+            {"price": {"value": "55.00", "currency": "EUR"}},
+            {"price": {"value": "60.50", "currency": "EUR"}},
+        ]
+    }
+    mock_get.return_value = mock_response
+
+    prices = search_used_prices("i5-10400 processor", "token123")
+
+    assert prices == [55.00, 60.50]
+
+
+@patch("ebay_client.requests.get")
+def test_search_used_prices_returns_empty_list_when_no_results(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+    mock_get.return_value = mock_response
+
+    prices = search_used_prices("completely-unknown-part", "token123")
+
+    assert prices == []
+
+
+@patch("ebay_client.requests.get")
+def test_search_used_prices_sends_marketplace_and_condition_filters(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"itemSummaries": []}
+    mock_get.return_value = mock_response
+
+    search_used_prices("i5-10400 processor", "token123")
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["headers"]["X-EBAY-C-MARKETPLACE-ID"] == "EBAY_FR"
+    assert "conditionIds" in kwargs["params"]["filter"]

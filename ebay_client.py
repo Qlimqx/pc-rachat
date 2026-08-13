@@ -17,3 +17,25 @@ def get_access_token(client_id, client_secret):
     )
     response.raise_for_status()
     return response.json()["access_token"]
+
+
+USED_CONDITION_IDS = "3000|4000|5000|6000"
+
+
+def search_used_prices(query, token, limit=20):
+    response = requests.get(
+        BROWSE_SEARCH_URL,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-EBAY-C-MARKETPLACE-ID": "EBAY_FR",
+        },
+        params={
+            "q": query,
+            "filter": f"conditionIds:{{{USED_CONDITION_IDS}}}",
+            "limit": limit,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return [float(item["price"]["value"]) for item in data.get("itemSummaries", [])]
