@@ -1,4 +1,5 @@
 import statistics
+from decimal import ROUND_HALF_UP, Decimal
 
 
 def median_price(prices):
@@ -88,3 +89,23 @@ def estimate_new_pc_price(cpu_model, gpu_model, search_fns):
         "value": median_price(all_prices),
         "method": f"médiane sur {len(all_prices)} annonces neuves",
     }
+
+
+def _round2(value):
+    # Plain round() on a binary float can land just below a .xx5 boundary
+    # (e.g. 999.0 * 0.415 == 414.58499999999997...) and round the wrong way.
+    # Route through Decimal(str(...)) so we round the same value a human
+    # would read, using standard half-up rounding.
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def estimate_buy_grid(new_pc_price, tiers):
+    grid = []
+    for index, tier in enumerate(tiers):
+        grid.append({
+            "max_price": _round2(new_pc_price * tier["max_pct"]),
+            "emoji": tier["emoji"],
+            "label": tier["label"],
+            "is_last": index == len(tiers) - 1,
+        })
+    return grid

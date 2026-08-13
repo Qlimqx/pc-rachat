@@ -205,3 +205,32 @@ def test_estimate_new_pc_price_works_with_a_single_source():
     result = estimate_new_pc_price("cpu", "gpu", [only_source])
 
     assert result == {"value": 999.0, "method": "médiane sur 1 annonces neuves"}
+
+
+from estimator import estimate_buy_grid
+
+
+def test_estimate_buy_grid_computes_price_per_tier():
+    tiers = [
+        {"max_pct": 0.40, "emoji": "🔥", "label": "Très bonne affaire"},
+        {"max_pct": 0.44, "emoji": "✅", "label": "Intéressant"},
+        {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"},
+    ]
+
+    result = estimate_buy_grid(1000.0, tiers)
+
+    assert result == [
+        {"max_price": 400.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
+        {"max_price": 440.0, "emoji": "✅", "label": "Intéressant", "is_last": False},
+        {"max_price": 1000.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+    ]
+
+
+def test_estimate_buy_grid_rounds_to_two_decimals():
+    tiers = [{"max_pct": 0.415, "emoji": "🔥", "label": "Très bonne affaire"}]
+
+    result = estimate_buy_grid(999.0, tiers)
+
+    assert result == [
+        {"max_price": 414.59, "emoji": "🔥", "label": "Très bonne affaire", "is_last": True}
+    ]
