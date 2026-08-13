@@ -33,7 +33,10 @@ def _price_text(price_el):
 
 def search_prices(cpu_model, gpu_model):
     try:
-        query = f"{cpu_model} {gpu_model}"
+        # LDLC's search does strict AND-matching; including both CPU and GPU model
+        # returns almost nothing (verified during research), so we search by GPU
+        # + a generic "PC gamer" term instead
+        query = f"PC gamer {gpu_model}"
         url = SEARCH_URL.format(query=requests.utils.quote(query))
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
