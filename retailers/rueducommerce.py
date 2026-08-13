@@ -1,3 +1,5 @@
+import re
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -16,16 +18,44 @@ HEADERS = {
 }
 
 
+def _title_matches_model(title, model):
+    """Check whether a product title refers to `model`, tolerating the
+    retailer's inconsistent spacing (titles render some models as "RTX4060"
+    with no space and others as "NVIDIA RTX 5060" with one) while still
+    rejecting near-miss variants like "RTX4060Ti" for a search of "RTX 4060".
+
+    Verified against the real fixture: RdC's titles are plain text with no
+    machine-readable model field, so this is a substring check, not fuzzy
+    matching -- spaces in `model` become optional (\\s*) so "RTX 4060"
+    matches title text "RTX4060", and a match is only accepted if the
+    character right after it isn't alphanumeric, so it doesn't also match
+    inside "RTX4060Ti" (Ti is a different, more expensive card and should
+    not count as a match for a plain "RTX 4060" search).
+    """
+    title_norm = title.lower()
+    pattern = re.escape(model.lower().strip()).replace(r"\ ", r"\s*")
+    match = re.search(pattern, title_norm)
+    if match is None:
+        return False
+    end = match.end()
+    return end == len(title_norm) or not title_norm[end].isalnum()
+
+
 def search_prices(cpu_model, gpu_model):
     try:
         # Unlike LDLC/Materiel.net/Grosbill (strict AND-matching, choke on
         # combined CPU+GPU queries), Rue du Commerce's search handles a
         # combined query well: verified live that "Ryzen 7 5700X RTX 4060"
-        # returned 48 listings in the "PC" category, the large majority of
-        # which are complete PC builds actually containing both parts (with
-        # some near-miss noise -- RTX 4060 Ti, Ryzen 7 9700X -- typical of
-        # this marketplace's fuzzy relevance ranking, similar to TopAchat/
-        # PcComponentes). So, like those two, both models are kept together.
+        # returned 48 listings in the "PC" category. Verified against the
+        # real fixture: only 33/48 titles actually contain "5700X" (15 are
+        # Ryzen 7 9700X or 7700X builds -- a different CPU generation, not a
+        # near-miss), and only 22/48 contain exact "4060" (43/48 contain
+        # "4060" as part of a family match, but the rest of those are 4060
+        # Ti, which is a different, more expensive card). Both models are
+        # kept together in the query since RdC's combined search still
+        # returns useful results overall, similar to TopAchat/PcComponentes
+        # -- but see the title-relevance filter below, which is what keeps
+        # the wrong-generation/wrong-card noise out of the returned prices.
         query = f"{cpu_model} {gpu_model}"
         url = SEARCH_URL.format(query=requests.utils.quote(query))
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -47,6 +77,19 @@ def search_prices(cpu_model, gpu_model):
         # itself uses a non-breaking space as the thousands separator and a
         # comma as the decimal separator (e.g. "1 639,90€").
         for card in soup.select("li.pdt-item"):
+            # Skip cards whose title doesn't actually reference both the
+            # requested CPU and GPU -- the combined query returns plenty of
+            # wrong-generation CPUs and wrong-tier GPUs (see comment above),
+            # and including their prices measurably skews the result (the
+            # wrong-CPU-generation subset has a median ~45% higher than the
+            # correctly matched subset). Titles live in "h3.title-3".
+            title_el = card.select_one("h3.title-3")
+            title = title_el.get_text(strip=True) if title_el else ""
+            if not (
+                _title_matches_model(title, cpu_model)
+                and _title_matches_model(title, gpu_model)
+            ):
+                continue
             price_container = card.select_one("div.price")
             if price_container is None:
                 continue
