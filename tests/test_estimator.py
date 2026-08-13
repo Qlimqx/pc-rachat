@@ -91,3 +91,79 @@ def test_estimate_component_returns_none_when_unknown_everywhere():
 
     result = estimate_component("unknown-cpu-9999", "cpu", fake_ebay_search, REFERENCE)
     assert result is None
+
+
+from estimator import estimate_pc
+
+
+def test_estimate_pc_full_breakdown_and_total():
+    def fake_ebay_search(model, category):
+        if category == "cpu":
+            return [50.0, 55.0, 60.0]
+        if category == "gpu":
+            return [100.0, 110.0, 120.0]
+        return []
+
+    rates = {"ram": {"ddr4": 2.0}, "storage": {"ssd": 0.05}}
+    result = estimate_pc(
+        cpu_model="i5-10400",
+        ram_go=16,
+        ram_type="ddr4",
+        storage_go=512,
+        storage_type="ssd",
+        gpu_model="gtx 1660",
+        ebay_search_fn=fake_ebay_search,
+        reference_prices={},
+        component_rates=rates,
+    )
+
+    assert result["breakdown"]["cpu"]["value"] == 55.0
+    assert result["breakdown"]["ram"]["value"] == 32.0
+    assert result["breakdown"]["storage"]["value"] == 25.6
+    assert result["breakdown"]["gpu"]["value"] == 110.0
+    assert result["total"] == 55.0 + 32.0 + 25.6 + 110.0
+    assert result["missing"] == []
+
+
+def test_estimate_pc_without_gpu():
+    def fake_ebay_search(model, category):
+        return [50.0]
+
+    rates = {"ram": {"ddr4": 2.0}, "storage": {"ssd": 0.05}}
+    result = estimate_pc(
+        cpu_model="i5-10400",
+        ram_go=16,
+        ram_type="ddr4",
+        storage_go=512,
+        storage_type="ssd",
+        gpu_model="",
+        ebay_search_fn=fake_ebay_search,
+        reference_prices={},
+        component_rates=rates,
+    )
+
+    assert result["breakdown"]["gpu"] is None
+    assert "gpu" not in result["missing"]
+    assert result["total"] == 50.0 + 32.0 + 25.6
+
+
+def test_estimate_pc_flags_missing_components():
+    def fake_ebay_search(model, category):
+        return []
+
+    rates = {"ram": {"ddr4": 2.0}, "storage": {"ssd": 0.05}}
+    result = estimate_pc(
+        cpu_model="unknown-cpu",
+        ram_go=16,
+        ram_type="ddr4",
+        storage_go=512,
+        storage_type="ssd",
+        gpu_model="unknown-gpu",
+        ebay_search_fn=fake_ebay_search,
+        reference_prices={},
+        component_rates=rates,
+    )
+
+    assert result["missing"] == ["cpu", "gpu"]
+    assert result["breakdown"]["cpu"] is None
+    assert result["total"] == 32.0 + 25.6

@@ -36,3 +36,41 @@ def estimate_component(model, category, ebay_search_fn, reference_table):
             return {"value": value, "method": "table de référence"}
 
     return None
+
+
+def estimate_pc(
+    cpu_model,
+    ram_go,
+    ram_type,
+    storage_go,
+    storage_type,
+    gpu_model,
+    ebay_search_fn,
+    reference_prices,
+    component_rates,
+):
+    breakdown = {}
+    missing = []
+
+    breakdown["cpu"] = estimate_component(cpu_model, "cpu", ebay_search_fn, reference_prices)
+    if breakdown["cpu"] is None:
+        missing.append("cpu")
+
+    breakdown["ram"] = estimate_ram(ram_go, ram_type, component_rates)
+    if breakdown["ram"] is None:
+        missing.append("ram")
+
+    breakdown["storage"] = estimate_storage(storage_go, storage_type, component_rates)
+    if breakdown["storage"] is None:
+        missing.append("storage")
+
+    if gpu_model:
+        breakdown["gpu"] = estimate_component(gpu_model, "gpu", ebay_search_fn, reference_prices)
+        if breakdown["gpu"] is None:
+            missing.append("gpu")
+    else:
+        breakdown["gpu"] = None
+
+    total = sum(r["value"] for r in breakdown.values() if r is not None)
+
+    return {"breakdown": breakdown, "total": round(total, 2), "missing": missing}
