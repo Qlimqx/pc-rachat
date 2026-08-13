@@ -1,4 +1,5 @@
 from unittest.mock import patch, Mock
+from urllib.parse import unquote
 
 from retailers.ldlc import search_prices
 
@@ -43,3 +44,24 @@ def test_search_prices_returns_empty_list_on_unparseable_html(mock_get):
     mock_get.return_value = mock_response
 
     assert search_prices("Ryzen 7 5700X", "RTX 4060") == []
+
+
+@patch("retailers.ldlc.requests.get")
+def test_search_prices_query_excludes_cpu_model(mock_get):
+    # LDLC's search does strict AND-matching, so including both the CPU and
+    # GPU model in the query returns almost nothing (verified via live
+    # research). This locks in that the requested URL is built from the GPU
+    # model plus a generic "PC gamer" term, and never leaks the CPU model.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_prices("Ryzen 7 5700X", "RTX 4060")
+
+    requested_url = mock_get.call_args[0][0]
+    decoded_url = unquote(requested_url)
+
+    assert "PC gamer" in decoded_url
+    assert "RTX 4060" in decoded_url
+    assert "ryzen" not in decoded_url.lower()
