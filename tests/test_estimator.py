@@ -207,6 +207,29 @@ def test_estimate_new_pc_price_works_with_a_single_source():
     assert result == {"value": 999.0, "method": "médiane sur 1 annonces neuves"}
 
 
+def test_estimate_new_pc_price_calls_sources_concurrently():
+    import time
+
+    def make_slow_source(price):
+        def slow_source(cpu_model, gpu_model):
+            time.sleep(0.1)
+            return [price]
+
+        return slow_source
+
+    slow_sources = [make_slow_source(1000.0 + i) for i in range(5)]
+
+    start = time.perf_counter()
+    result = estimate_new_pc_price("cpu", "gpu", slow_sources)
+    elapsed = time.perf_counter() - start
+
+    assert result is not None
+    assert elapsed < 0.3, (
+        f"expected concurrent execution (~0.1s), took {elapsed:.3f}s "
+        "(sequential would take >=0.5s)"
+    )
+
+
 from estimator import estimate_buy_grid
 
 

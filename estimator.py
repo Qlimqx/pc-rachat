@@ -1,4 +1,5 @@
 import statistics
+from concurrent.futures import ThreadPoolExecutor
 from decimal import ROUND_HALF_UP, Decimal
 
 
@@ -77,10 +78,34 @@ def estimate_pc(
     return {"breakdown": breakdown, "total": round(total, 2), "missing": missing}
 
 
+def _run_search_fn_safely(search_fn, cpu_model, gpu_model):
+    # search_fns aren't supposed to raise (each source is expected to fail
+    # silently and return []), but a single misbehaving source shouldn't be
+    # able to take down the whole aggregation, so we defend here too.
+    try:
+        return search_fn(cpu_model, gpu_model)
+    except Exception:
+        return []
+
+
 def estimate_new_pc_price(cpu_model, gpu_model, search_fns):
+    search_fns = list(search_fns)
     all_prices = []
-    for search_fn in search_fns:
-        all_prices.extend(search_fn(cpu_model, gpu_model))
+
+    if search_fns:
+        # Every search_fn does blocking network I/O (requests.get(...,
+        # timeout=10)), so calling them sequentially means worst-case
+        # wall-clock time is the SUM of all their timeouts. Threads give
+        # real concurrency here because Python releases the GIL during
+        # blocking I/O, so worst-case wall-clock time instead becomes the
+        # slowest single source.
+        with ThreadPoolExecutor(max_workers=len(search_fns)) as executor:
+            futures = [
+                executor.submit(_run_search_fn_safely, search_fn, cpu_model, gpu_model)
+                for search_fn in search_fns
+            ]
+            for future in futures:
+                all_prices.extend(future.result())
 
     if not all_prices:
         return None
