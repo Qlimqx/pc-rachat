@@ -109,6 +109,29 @@ def test_search_ram_prices_returns_empty_list_on_network_failure(mock_get):
 
 
 @patch("retailers.ldlc.requests.get")
+def test_search_ram_prices_query_contains_size_and_type(mock_get):
+    # Locks in the constructed query so a future edit to the f-string in
+    # search_ram_prices can't silently regress without a test catching it.
+    # Also guards against re-introducing a case transform (e.g. .upper()):
+    # LDLC's search is case-insensitive (verified live -- "RAM 16Go ddr4"
+    # and "RAM 16Go DDR4" return identical results), so ram_type must be
+    # passed through unmodified.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_ram_prices(16, "ddr4")
+
+    requested_url = mock_get.call_args[0][0]
+    decoded_url = unquote(requested_url)
+
+    assert "RAM" in decoded_url
+    assert "16Go" in decoded_url
+    assert "ddr4" in decoded_url
+
+
+@patch("retailers.ldlc.requests.get")
 def test_search_storage_prices_extracts_prices_from_real_fixture(mock_get):
     with open("tests/fixtures/ldlc_storage_search.html", encoding="utf-8") as f:
         html = f.read()
@@ -128,3 +151,25 @@ def test_search_storage_prices_extracts_prices_from_real_fixture(mock_get):
 @patch("retailers.ldlc.requests.get", side_effect=Exception("network error"))
 def test_search_storage_prices_returns_empty_list_on_network_failure(mock_get):
     assert search_storage_prices(512, "ssd") == []
+
+
+@patch("retailers.ldlc.requests.get")
+def test_search_storage_prices_query_contains_size_and_type(mock_get):
+    # Locks in the constructed query so a future edit to the f-string in
+    # search_storage_prices can't silently regress without a test catching
+    # it. Also guards against re-introducing a case transform (e.g.
+    # .upper()): LDLC's search is case-insensitive (verified live), so
+    # storage_type must be passed through unmodified.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_storage_prices(512, "ssd")
+
+    requested_url = mock_get.call_args[0][0]
+    decoded_url = unquote(requested_url)
+
+    assert "Disque" in decoded_url
+    assert "ssd" in decoded_url
+    assert "512Go" in decoded_url

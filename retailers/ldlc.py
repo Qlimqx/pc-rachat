@@ -66,8 +66,10 @@ def search_ram_prices(ram_go, ram_type):
     # "RAM 16Go DDR4") keeps the search anchored to RAM products only --
     # every result on the first page is an actual memory module, though not
     # all match the exact capacity/speed, same tradeoff as the GPU search
-    # above.
-    return _search(f"RAM {ram_go}Go {ram_type.upper()}")
+    # above. Case doesn't affect relevance -- "RAM 16Go ddr4" and
+    # "RAM 16Go DDR4" return byte-identical result sets, verified live
+    # against ldlc.com -- so ram_type is passed through as-is.
+    return _search(f"RAM {ram_go}Go {ram_type}")
 
 
 def search_storage_prices(storage_go, storage_type):
@@ -78,5 +80,6 @@ def search_storage_prices(storage_go, storage_type):
     # appears order-insensitive). Switching to "Disque SSD {go}Go" (e.g.
     # "Disque SSD 512Go") returns genuine standalone SSD listings (Samsung,
     # Kingston, Crucial, WD, Patriot, etc.) across a range of capacities --
-    # verified live against ldlc.com.
-    return _search(f"Disque {storage_type.upper()} {storage_go}Go")
+    # verified live against ldlc.com. Case doesn't affect relevance either
+    # (verified live), so storage_type is passed through as-is.
+    return _search(f"Disque {storage_type} {storage_go}Go")
