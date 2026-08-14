@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 import ebay_client
 import estimator
+import sourcing
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -71,6 +72,20 @@ def make_ebay_search_fn(client_id, client_secret):
     return real_ebay_search
 
 
+def format_pricing_grid(new_pc_price, buy_grid, resale_target):
+    lines = [f"Prix neuf équivalent estimé : {new_pc_price:.2f}€", "", "Grille d'achat :"]
+    for tier in buy_grid:
+        if tier["is_last"]:
+            lines.append(f"  au-delà de {tier['max_price']:.2f}€ {tier['emoji']} {tier['label']}")
+        else:
+            lines.append(f"  jusqu'à {tier['max_price']:.2f}€ {tier['emoji']} {tier['label']}")
+    lines.append("")
+    lines.append(
+        f"Prix de revente visé : {resale_target['min']:.2f}€ – {resale_target['max']:.2f}€"
+    )
+    return "\n".join(lines)
+
+
 def main():
     # On Windows, stdout is sometimes attached to a legacy codepage (e.g. cp1252)
     # instead of UTF-8 — particularly when output is piped/redirected. Without
@@ -89,7 +104,10 @@ def main():
 
     reference_prices = load_json(DATA_DIR / "reference_prices.json")
     component_rates = load_json(DATA_DIR / "component_rates.json")
+    buy_tiers = load_json(DATA_DIR / "buy_tiers.json")
+    resale_config = load_json(DATA_DIR / "resale_target.json")
     ebay_search_fn = make_ebay_search_fn(client_id, client_secret)
+    new_pc_search_fns = sourcing.make_new_pc_search_fn(client_id, client_secret)
 
     print("=== Estimation de rachat PC ===\n")
     cpu_model = input("Modèle CPU (ex: i5-10400) : ").strip()
@@ -110,6 +128,15 @@ def main():
         reference_prices=reference_prices,
         component_rates=component_rates,
     )
+
+    new_pc_result = estimator.estimate_new_pc_price(cpu_model, gpu_model, new_pc_search_fns)
+    print()
+    if new_pc_result is not None:
+        buy_grid = estimator.estimate_buy_grid(new_pc_result["value"], buy_tiers)
+        resale_target = estimator.estimate_resale_target(new_pc_result["value"], resale_config)
+        print(format_pricing_grid(new_pc_result["value"], buy_grid, resale_target))
+    else:
+        print("Grille d'achat non disponible — aucun PC neuf comparable trouvé.")
 
     print("\n" + format_result(result))
 

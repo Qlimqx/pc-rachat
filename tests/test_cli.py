@@ -99,3 +99,21 @@ def test_format_result_omits_gpu_line_details_when_no_gpu_given():
 
     assert "GPU : non renseigné" in output
     assert "estimation incomplète" not in output
+
+
+from cli import format_pricing_grid
+
+
+def test_format_pricing_grid_renders_tiers_and_resale_range():
+    buy_grid = [
+        {"max_price": 400.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
+        {"max_price": 1000.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+    ]
+    resale_target = {"min": 600.0, "max": 680.0}
+
+    output = format_pricing_grid(1000.0, buy_grid, resale_target)
+
+    assert "Prix neuf équivalent estimé : 1000.00€" in output
+    assert "jusqu'à 400.00€ 🔥 Très bonne affaire" in output
+    assert "au-delà de 1000.00€ ❌ Je passe" in output
+    assert "Prix de revente visé : 600.00€ – 680.00€" in output
