@@ -47,6 +47,35 @@ def test_search_prices_returns_empty_list_on_unparseable_html(mock_get):
 
 
 @patch("retailers.amazon.requests.get")
+def test_search_prices_rejects_space_separated_near_miss_suffix(mock_get):
+    # Regression test for the title-relevance filter's boundary check: a
+    # near-miss variant written with a space before the suffix qualifier
+    # (e.g. "RTX 4060 Ti") must be rejected exactly like the concatenated
+    # form (e.g. "RTX4060Ti") -- both are a different, pricier card than a
+    # plain "RTX 4060" search.
+    html = """
+    <html><body>
+    <div data-component-type="s-search-result">
+      <h2><span>PC Gamer Ryzen 7 5700X RTX 4060 Ti 16GB</span></h2>
+      <div class="a-price"><span class="a-offscreen">1&nbsp;999,90&#8364;</span></div>
+    </div>
+    <div data-component-type="s-search-result">
+      <h2><span>PC Gamer Ryzen 7 5700X RTX 4060 16GB</span></h2>
+      <div class="a-price"><span class="a-offscreen">1&nbsp;399,90&#8364;</span></div>
+    </div>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_prices("Ryzen 7 5700X", "RTX 4060")
+
+    assert prices == [1399.9]
+
+
+@patch("retailers.amazon.requests.get")
 def test_search_prices_query_includes_both_cpu_and_gpu_model(mock_get):
     # Unlike LDLC/Materiel.net/Grosbill (strict AND-matching, choke on
     # combined CPU+GPU queries), Amazon's search doesn't reject a combined

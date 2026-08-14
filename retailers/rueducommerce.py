@@ -18,19 +18,39 @@ HEADERS = {
 }
 
 
+# Suffix qualifiers that, when they immediately follow a matched model
+# number (whether concatenated or separated by whitespace), mark a
+# different, typically pricier variant rather than the base model -- e.g.
+# "RTX4060Ti" and "RTX 4060 Ti" are both a different card than "RTX 4060"
+# and must both be rejected. This is a deliberately narrow, known list
+# rather than a blanket "reject any alphanumeric token after the match"
+# rule: a blanket rule would also reject legitimate matches where the
+# model is simply followed by unrelated product text that happens to
+# start with a letter/digit, e.g. "RTX 4060 16GB" (the "16gb" RAM spec is
+# not a suffix extending the model number, so it must still count as a
+# match).
+_SUFFIX_QUALIFIERS = ("ti", "super", "xt", "xtx", "x3d")
+
+
 def _title_matches_model(title, model):
     """Check whether a product title refers to `model`, tolerating the
     retailer's inconsistent spacing (titles render some models as "RTX4060"
     with no space and others as "NVIDIA RTX 5060" with one) while still
-    rejecting near-miss variants like "RTX4060Ti" for a search of "RTX 4060".
+    rejecting near-miss variants such as "RTX4060Ti" or "RTX 4060 Ti" for a
+    search of "RTX 4060".
 
     Verified against the real fixture: RdC's titles are plain text with no
     machine-readable model field, so this is a substring check, not fuzzy
     matching -- spaces in `model` become optional (\\s*) so "RTX 4060"
-    matches title text "RTX4060", and a match is only accepted if the
-    character right after it isn't alphanumeric, so it doesn't also match
-    inside "RTX4060Ti" (Ti is a different, more expensive card and should
-    not count as a match for a plain "RTX 4060" search).
+    matches title text "RTX4060". A match is rejected in two cases: (1) the
+    character right after it is alphanumeric with no separating space at
+    all, e.g. inside "RTX4060Ti" -- any concatenated alphanumeric suffix is
+    treated as extending the model number, since there's no space to prove
+    otherwise; or (2) the first word after the match, once any whitespace
+    is skipped, is one of a small known list of GPU/CPU suffix qualifiers
+    (`_SUFFIX_QUALIFIERS`, e.g. "Ti", "Super", "XT"), e.g. "RTX 4060 Ti".
+    Anything else after a space -- e.g. "RTX 4060 16GB" -- is treated as
+    unrelated trailing product text and still counts as a match.
     """
     title_norm = title.lower()
     pattern = re.escape(model.lower().strip()).replace(r"\ ", r"\s*")
@@ -38,7 +58,13 @@ def _title_matches_model(title, model):
     if match is None:
         return False
     end = match.end()
-    return end == len(title_norm) or not title_norm[end].isalnum()
+    tail = title_norm[end:]
+    if tail and tail[0].isalnum():
+        return False
+    next_word = re.match(r"\s+([a-z0-9]+)", tail)
+    if next_word and next_word.group(1) in _SUFFIX_QUALIFIERS:
+        return False
+    return True
 
 
 def search_prices(cpu_model, gpu_model):

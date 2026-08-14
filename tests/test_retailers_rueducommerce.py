@@ -45,6 +45,35 @@ def test_search_prices_returns_empty_list_on_unparseable_html(mock_get):
 
 
 @patch("retailers.rueducommerce.requests.get")
+def test_search_prices_rejects_space_separated_near_miss_suffix(mock_get):
+    # Regression test for the title-relevance filter's boundary check: a
+    # near-miss variant written with a space before the suffix qualifier
+    # (e.g. "RTX 4060 Ti") must be rejected exactly like the concatenated
+    # form (e.g. "RTX4060Ti") already correctly seen in the real fixture --
+    # both are a different, pricier card than a plain "RTX 4060" search.
+    html = """
+    <html><body>
+    <li class="pdt-item">
+      <h3 class="title-3">Sedatech PC Gamer, AMD Ryzen 7 5700X, RTX 4060 Ti, 32Go RAM</h3>
+      <div class="price"><div class="new-price">1&nbsp;999,90&#8364;</div></div>
+    </li>
+    <li class="pdt-item">
+      <h3 class="title-3">Sedatech PC Gamer, AMD Ryzen 7 5700X, RTX 4060, 32Go RAM</h3>
+      <div class="price"><div class="new-price">1&nbsp;399,90&#8364;</div></div>
+    </li>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_prices("Ryzen 7 5700X", "RTX 4060")
+
+    assert prices == [1399.9]
+
+
+@patch("retailers.rueducommerce.requests.get")
 def test_search_prices_query_includes_both_cpu_and_gpu_model(mock_get):
     # Rue du Commerce's search (a path-based /recherche/{query}/ endpoint,
     # server-rendered -- no JSON API involved, verified live via network
