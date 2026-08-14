@@ -88,6 +88,7 @@ def estimate_component(model, category, ebay_search_fn, reference_table):
 
 
 def estimate_pc(
+    *,
     cpu_model,
     ram_go,
     ram_type,
