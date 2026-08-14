@@ -43,6 +43,14 @@ python cli.py
 
 Le script te demande le modèle du CPU, la taille et le type de RAM, la taille et le type de stockage, puis le modèle du GPU (laisse vide si carte graphique intégrée). Il affiche ensuite le détail par composant et le total estimé.
 
+### Interface web (en local)
+
+```bash
+python app.py
+```
+
+Lance un serveur Flask en local (par défaut sur `http://127.0.0.1:5000`). Ouvre l'URL dans ton navigateur : tu retrouves les mêmes champs que la version en ligne de commande (CPU, RAM, stockage, GPU), avec en plus la grille d'achat et le prix de revente visé si l'outil trouve un PC neuf comparable.
+
 ## Déploiement sur Render
 
 L'appli web (`app.py`) est prête à être déployée sur [Render](https://render.com/) :
