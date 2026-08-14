@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>pc-rachat</title>
+</head>
+<body>
+  <h1>Estimation de rachat PC</h1>
+
+  {% if error %}
+    <p style="color: red;">{{ error }}</p>
+  {% endif %}
+
+  <form method="post">
+    <label>Modèle CPU (ex: i5-10400)
+      <input type="text" name="cpu_model" value="{{ form_values.cpu_model if form_values else '' }}">
+    </label><br>
+
+    <label>RAM (Go)
+      <input type="text" name="ram_go" value="{{ form_values.ram_go if form_values else '' }}">
+    </label>
+    <label>Type RAM
+      <select name="ram_type">
+        <option value="ddr3">DDR3</option>
+        <option value="ddr4">DDR4</option>
+        <option value="ddr5">DDR5</option>
+      </select>
+    </label><br>
+
+    <label>Stockage (Go)
+      <input type="text" name="storage_go" value="{{ form_values.storage_go if form_values else '' }}">
+    </label>
+    <label>Type stockage
+      <select name="storage_type">
+        <option value="hdd">HDD</option>
+        <option value="ssd">SSD</option>
+        <option value="nvme">NVMe</option>
+      </select>
+    </label><br>
+
+    <label>Modèle GPU (laisser vide si intégré)
+      <input type="text" name="gpu_model" value="{{ form_values.gpu_model if form_values else '' }}">
+    </label><br>
+
+    <button type="submit">Estimer</button>
+  </form>
+
+  {% if new_pc_price is not none %}
+    <h2>Grille d'achat</h2>
+    <p>Prix neuf équivalent estimé : {{ "%.2f"|format(new_pc_price) }}€</p>
+    <ul>
+      {% for tier in buy_grid %}
+        <li>
+          {% if tier.is_last %}
+            au-delà de {{ "%.2f"|format(tier.max_price) }}€ {{ tier.emoji }} {{ tier.label }}
+          {% else %}
+            jusqu'à {{ "%.2f"|format(tier.max_price) }}€ {{ tier.emoji }} {{ tier.label }}
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <h2>Prix de revente visé</h2>
+    <p>{{ "%.2f"|format(resale_target.min) }}€ – {{ "%.2f"|format(resale_target.max) }}€</p>
+  {% elif result %}
+    <p>Grille d'achat non disponible — aucun PC neuf comparable trouvé.</p>
+  {% endif %}
+
+  {% if result %}
+    <h2>Détail par composant</h2>
+    <ul>
+      {% for key, label in [("cpu", "CPU"), ("ram", "RAM"), ("storage", "Stockage"), ("gpu", "GPU")] %}
+        <li>
+          {% if result.breakdown[key] %}
+            {{ label }} : {{ "%.2f"|format(result.breakdown[key].value) }}€ ({{ result.breakdown[key].method }})
+          {% elif key == "gpu" and key not in result.missing %}
+            {{ label }} : non renseigné
+          {% else %}
+            {{ label }} : prix inconnu ⚠
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <p>Total estimé : {{ "%.2f"|format(result.total) }}€</p>
+    {% if result.missing %}
+      <p>⚠ estimation incomplète — composants inconnus : {{ result.missing|join(", ") }}</p>
+    {% endif %}
+  {% endif %}
+</body>
+</html>
