@@ -13,7 +13,12 @@
 
   <form method="post">
     <label>Modèle CPU (ex: i5-10400)
-      <input type="text" name="cpu_model" value="{{ form_values.cpu_model if form_values else '' }}">
+      <input type="text" name="cpu_model" list="cpu-models" value="{{ form_values.cpu_model if form_values else '' }}">
+      <datalist id="cpu-models">
+        {% for model in cpu_models %}
+          <option value="{{ model }}">
+        {% endfor %}
+      </datalist>
     </label><br>
 
     <label>RAM (Go)
@@ -39,7 +44,12 @@
     </label><br>
 
     <label>Modèle GPU (laisser vide si intégré)
-      <input type="text" name="gpu_model" value="{{ form_values.gpu_model if form_values else '' }}">
+      <input type="text" name="gpu_model" list="gpu-models" value="{{ form_values.gpu_model if form_values else '' }}">
+      <datalist id="gpu-models">
+        {% for model in gpu_models %}
+          <option value="{{ model }}">
+        {% endfor %}
+      </datalist>
     </label><br>
 
     <button type="submit">Estimer</button>

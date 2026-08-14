@@ -12,6 +12,8 @@ load_dotenv()
 
 app = Flask(__name__)
 DATA_DIR = Path(__file__).parent / "data"
+CPU_MODELS = cli_helpers.load_json(DATA_DIR / "cpu_models.json")
+GPU_MODELS = cli_helpers.load_json(DATA_DIR / "gpu_models.json")
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -72,6 +74,8 @@ def index():
         new_pc_price=new_pc_price,
         error=error,
         form_values=form_values,
+        cpu_models=CPU_MODELS,
+        gpu_models=GPU_MODELS,
     )
 
 

@@ -97,3 +97,17 @@ def test_index_post_with_validation_error_keeps_ram_type_selected():
     html = response.data.decode("utf-8")
     assert '<option value="ddr5" selected>' in html
     assert '<option value="ddr3" selected>' not in html
+
+
+def test_index_get_shows_cpu_and_gpu_datalists_with_options():
+    client = flask_app_module.app.test_client()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert b'list="cpu-models"' in response.data
+    assert b'list="gpu-models"' in response.data
+    assert b'<datalist id="cpu-models">' in response.data
+    assert b'<datalist id="gpu-models">' in response.data
+    assert "Ryzen 7 5700X".encode("utf-8") in response.data
+    assert "RTX 4060".encode("utf-8") in response.data
