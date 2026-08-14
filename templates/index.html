@@ -21,9 +21,9 @@
     </label>
     <label>Type RAM
       <select name="ram_type">
-        <option value="ddr3">DDR3</option>
-        <option value="ddr4">DDR4</option>
-        <option value="ddr5">DDR5</option>
+        <option value="ddr3" {{ "selected" if form_values and form_values.ram_type == "ddr3" else "" }}>DDR3</option>
+        <option value="ddr4" {{ "selected" if form_values and form_values.ram_type == "ddr4" else "" }}>DDR4</option>
+        <option value="ddr5" {{ "selected" if form_values and form_values.ram_type == "ddr5" else "" }}>DDR5</option>
       </select>
     </label><br>
 
@@ -32,9 +32,9 @@
     </label>
     <label>Type stockage
       <select name="storage_type">
-        <option value="hdd">HDD</option>
-        <option value="ssd">SSD</option>
-        <option value="nvme">NVMe</option>
+        <option value="hdd" {{ "selected" if form_values and form_values.storage_type == "hdd" else "" }}>HDD</option>
+        <option value="ssd" {{ "selected" if form_values and form_values.storage_type == "ssd" else "" }}>SSD</option>
+        <option value="nvme" {{ "selected" if form_values and form_values.storage_type == "nvme" else "" }}>NVMe</option>
       </select>
     </label><br>
 

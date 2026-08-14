@@ -76,3 +76,24 @@ def test_index_post_with_invalid_number_reshows_form_with_error():
 
     assert response.status_code == 200
     assert "Modèle CPU".encode("utf-8") in response.data
+
+
+def test_index_post_with_validation_error_keeps_ram_type_selected():
+    client = flask_app_module.app.test_client()
+
+    response = client.post(
+        "/",
+        data={
+            "cpu_model": "i5-10400",
+            "ram_go": "pas-un-nombre",
+            "ram_type": "ddr5",
+            "storage_go": "512",
+            "storage_type": "ssd",
+            "gpu_model": "",
+        },
+    )
+
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert '<option value="ddr5" selected>' in html
+    assert '<option value="ddr3" selected>' not in html
