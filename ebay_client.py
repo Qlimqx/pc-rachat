@@ -77,6 +77,7 @@ def search_ram_prices(ram_go, ram_type, client_id, client_secret):
 def search_storage_prices(storage_go, storage_type, client_id, client_secret):
     try:
         token = get_access_token(client_id, client_secret)
-        return search_new_prices(f"{storage_go}Go {storage_type}", token)
+        # "interne" biases results toward internal drives rather than external/USB enclosures (not live-validated against real eBay results -- no API credentials available in this environment)
+        return search_new_prices(f"{storage_go}Go {storage_type} interne", token)
     except Exception:
         return []

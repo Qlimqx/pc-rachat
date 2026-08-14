@@ -179,7 +179,7 @@ def test_search_storage_prices_returns_prices_on_success(mock_token, mock_search
     result = search_storage_prices(512, "ssd", "id", "secret")
 
     assert result == [45.0, 50.0]
-    mock_search.assert_called_once_with("512Go ssd", "tok")
+    mock_search.assert_called_once_with("512Go ssd interne", "tok")
 
 
 @patch("ebay_client.get_access_token", side_effect=Exception("network error"))
