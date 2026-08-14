@@ -31,12 +31,8 @@ def _price_text(price_el):
     return f"{euro_digits},{cents}"
 
 
-def search_prices(cpu_model, gpu_model):
+def _search(query):
     try:
-        # LDLC's search does strict AND-matching; including both CPU and GPU model
-        # returns almost nothing (verified during research), so we search by GPU
-        # + a generic "PC gamer" term instead
-        query = f"PC gamer {gpu_model}"
         url = SEARCH_URL.format(query=requests.utils.quote(query))
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
@@ -53,3 +49,34 @@ def search_prices(cpu_model, gpu_model):
         return prices
     except Exception:
         return []
+
+
+def search_prices(cpu_model, gpu_model):
+    # LDLC's search does strict AND-matching; including both CPU and GPU model
+    # returns almost nothing (verified during research), so we search by GPU
+    # + a generic "PC gamer" term instead
+    return _search(f"PC gamer {gpu_model}")
+
+
+def search_ram_prices(ram_go, ram_type):
+    # Tried "{go}Go {type}" (e.g. "16Go DDR4") first: it returns real RAM
+    # listings but mixed with unrelated matches (DDR3 sticks, NAS appliances,
+    # refurbished laptops that merely mention "16 Go" RAM in their specs) --
+    # verified live against ldlc.com. Prefixing with "RAM" (e.g.
+    # "RAM 16Go DDR4") keeps the search anchored to RAM products only --
+    # every result on the first page is an actual memory module, though not
+    # all match the exact capacity/speed, same tradeoff as the GPU search
+    # above.
+    return _search(f"RAM {ram_go}Go {ram_type.upper()}")
+
+
+def search_storage_prices(storage_go, storage_type):
+    # Tried "{go}Go {type}" (e.g. "512Go SSD") first: on ldlc.com this
+    # returns almost exclusively refurbished laptops/desktops that happen to
+    # ship with a 512Go SSD, not standalone drives -- useless for pricing a
+    # storage upgrade. "SSD {go}Go" gave the identical result (LDLC's search
+    # appears order-insensitive). Switching to "Disque SSD {go}Go" (e.g.
+    # "Disque SSD 512Go") returns genuine standalone SSD listings (Samsung,
+    # Kingston, Crucial, WD, Patriot, etc.) across a range of capacities --
+    # verified live against ldlc.com.
+    return _search(f"Disque {storage_type.upper()} {storage_go}Go")
