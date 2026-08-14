@@ -14,11 +14,58 @@ def _estimate_by_rate(size_go, component_type, rates, category):
     return {"value": round(size_go * rate, 2), "method": "formule €/Go"}
 
 
-def estimate_ram(size_go, ram_type, rates):
+def _run_search_fn_safely(search_fn, arg1, arg2):
+    # search_fns aren't supposed to raise (each source is expected to fail
+    # silently and return []), but a single misbehaving source shouldn't be
+    # able to take down the whole aggregation, so we defend here too. Shared
+    # across every multi-source aggregation in this module (new-PC price,
+    # RAM, storage) since every search_fn takes exactly two positional args.
+    try:
+        return search_fn(arg1, arg2)
+    except Exception:
+        return []
+
+
+def _aggregate_market_prices(arg1, arg2, search_fns):
+    # Shared by estimate_new_pc_price/estimate_ram/estimate_storage: run every
+    # search_fn concurrently and merge whatever prices they find. Every
+    # search_fn does blocking network I/O (requests.get(..., timeout=10)), so
+    # calling them sequentially means worst-case wall-clock time is the SUM of
+    # all their timeouts. Threads give real concurrency here because Python
+    # releases the GIL during blocking I/O, so worst-case wall-clock time
+    # instead becomes the slowest single source.
+    search_fns = list(search_fns)
+    all_prices = []
+
+    if search_fns:
+        with ThreadPoolExecutor(max_workers=len(search_fns)) as executor:
+            futures = [
+                executor.submit(_run_search_fn_safely, search_fn, arg1, arg2)
+                for search_fn in search_fns
+            ]
+            for future in futures:
+                all_prices.extend(future.result())
+
+    return all_prices
+
+
+def estimate_ram(size_go, ram_type, search_fns, rates):
+    all_prices = _aggregate_market_prices(size_go, ram_type, search_fns)
+    if all_prices:
+        return {
+            "value": median_price(all_prices),
+            "method": f"médiane sur {len(all_prices)} annonces neuves",
+        }
     return _estimate_by_rate(size_go, ram_type, rates, "ram")
 
 
-def estimate_storage(size_go, storage_type, rates):
+def estimate_storage(size_go, storage_type, search_fns, rates):
+    all_prices = _aggregate_market_prices(size_go, storage_type, search_fns)
+    if all_prices:
+        return {
+            "value": median_price(all_prices),
+            "method": f"médiane sur {len(all_prices)} annonces neuves",
+        }
     return _estimate_by_rate(size_go, storage_type, rates, "storage")
 
 
@@ -78,34 +125,8 @@ def estimate_pc(
     return {"breakdown": breakdown, "total": round(total, 2), "missing": missing}
 
 
-def _run_search_fn_safely(search_fn, cpu_model, gpu_model):
-    # search_fns aren't supposed to raise (each source is expected to fail
-    # silently and return []), but a single misbehaving source shouldn't be
-    # able to take down the whole aggregation, so we defend here too.
-    try:
-        return search_fn(cpu_model, gpu_model)
-    except Exception:
-        return []
-
-
 def estimate_new_pc_price(cpu_model, gpu_model, search_fns):
-    search_fns = list(search_fns)
-    all_prices = []
-
-    if search_fns:
-        # Every search_fn does blocking network I/O (requests.get(...,
-        # timeout=10)), so calling them sequentially means worst-case
-        # wall-clock time is the SUM of all their timeouts. Threads give
-        # real concurrency here because Python releases the GIL during
-        # blocking I/O, so worst-case wall-clock time instead becomes the
-        # slowest single source.
-        with ThreadPoolExecutor(max_workers=len(search_fns)) as executor:
-            futures = [
-                executor.submit(_run_search_fn_safely, search_fn, cpu_model, gpu_model)
-                for search_fn in search_fns
-            ]
-            for future in futures:
-                all_prices.extend(future.result())
+    all_prices = _aggregate_market_prices(cpu_model, gpu_model, search_fns)
 
     if not all_prices:
         return None

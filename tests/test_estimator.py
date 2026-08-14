@@ -20,26 +20,94 @@ RATES = {
 
 
 def test_estimate_ram_known_type():
-    result = estimate_ram(16, "ddr4", RATES)
+    result = estimate_ram(16, "ddr4", [], RATES)
     assert result == {"value": 32.0, "method": "formule €/Go"}
 
 
 def test_estimate_ram_unknown_type_returns_none():
-    assert estimate_ram(16, "ddr7", RATES) is None
+    assert estimate_ram(16, "ddr7", [], RATES) is None
 
 
 def test_estimate_ram_type_is_case_insensitive():
-    result = estimate_ram(8, "DDR4", RATES)
+    result = estimate_ram(8, "DDR4", [], RATES)
     assert result == {"value": 16.0, "method": "formule €/Go"}
 
 
 def test_estimate_storage_known_type():
-    result = estimate_storage(512, "ssd", RATES)
+    result = estimate_storage(512, "ssd", [], RATES)
     assert result == {"value": 25.6, "method": "formule €/Go"}
 
 
 def test_estimate_storage_unknown_type_returns_none():
-    assert estimate_storage(512, "zip-disk", RATES) is None
+    assert estimate_storage(512, "zip-disk", [], RATES) is None
+
+
+def test_estimate_ram_uses_market_median_when_sources_find_prices():
+    def source_a(size_go, ram_type):
+        return [280.0, 300.0]
+
+    def source_b(size_go, ram_type):
+        return [320.0]
+
+    result = estimate_ram(32, "ddr5", [source_a, source_b], RATES)
+
+    assert result == {"value": 300.0, "method": "médiane sur 3 annonces neuves"}
+
+
+def test_estimate_ram_falls_back_to_formula_when_no_market_results():
+    def empty_source(size_go, ram_type):
+        return []
+
+    result = estimate_ram(16, "ddr4", [empty_source], RATES)
+
+    assert result == {"value": 32.0, "method": "formule €/Go"}
+
+
+def test_estimate_ram_falls_back_to_formula_when_no_search_fns():
+    result = estimate_ram(16, "ddr4", [], RATES)
+
+    assert result == {"value": 32.0, "method": "formule €/Go"}
+
+
+def test_estimate_storage_uses_market_median_when_sources_find_prices():
+    def source_a(size_go, storage_type):
+        return [45.0, 50.0, 55.0]
+
+    result = estimate_storage(512, "ssd", [source_a], RATES)
+
+    assert result == {"value": 50.0, "method": "médiane sur 3 annonces neuves"}
+
+
+def test_estimate_storage_falls_back_to_formula_when_no_market_results():
+    def empty_source(size_go, storage_type):
+        return []
+
+    result = estimate_storage(512, "ssd", [empty_source], RATES)
+
+    assert result == {"value": 25.6, "method": "formule €/Go"}
+
+
+def test_estimate_ram_aggregates_sources_concurrently():
+    import time
+
+    def make_slow_source(price):
+        def slow_source(size_go, ram_type):
+            time.sleep(0.1)
+            return [price]
+
+        return slow_source
+
+    slow_sources = [make_slow_source(280.0 + i) for i in range(5)]
+
+    start = time.perf_counter()
+    result = estimate_ram(32, "ddr5", slow_sources, RATES)
+    elapsed = time.perf_counter() - start
+
+    assert result is not None
+    assert elapsed < 0.3, (
+        f"expected concurrent execution (~0.1s), took {elapsed:.3f}s "
+        "(sequential would take >=0.5s)"
+    )
 
 
 from estimator import normalize_model
