@@ -183,6 +183,8 @@ def test_estimate_pc_full_breakdown_and_total():
         ebay_search_fn=fake_ebay_search,
         reference_prices={},
         component_rates=rates,
+        ram_search_fns=[],
+        storage_search_fns=[],
     )
 
     assert result["breakdown"]["cpu"]["value"] == 55.0
@@ -208,6 +210,8 @@ def test_estimate_pc_without_gpu():
         ebay_search_fn=fake_ebay_search,
         reference_prices={},
         component_rates=rates,
+        ram_search_fns=[],
+        storage_search_fns=[],
     )
 
     assert result["breakdown"]["gpu"] is None
@@ -230,11 +234,48 @@ def test_estimate_pc_flags_missing_components():
         ebay_search_fn=fake_ebay_search,
         reference_prices={},
         component_rates=rates,
+        ram_search_fns=[],
+        storage_search_fns=[],
     )
 
     assert result["missing"] == ["cpu", "gpu"]
     assert result["breakdown"]["cpu"] is None
     assert result["total"] == 32.0 + 25.6
+
+
+def test_estimate_pc_uses_market_prices_for_ram_and_storage_when_available():
+    def fake_ebay_search(model, category):
+        return []
+
+    def ram_source(size_go, ram_type):
+        return [280.0, 300.0]
+
+    def storage_source(size_go, storage_type):
+        return [45.0, 50.0]
+
+    rates = {"ram": {"ddr5": 9.5}, "storage": {"ssd": 0.05}}
+    result = estimate_pc(
+        cpu_model="unknown-cpu",
+        ram_go=32,
+        ram_type="ddr5",
+        storage_go=512,
+        storage_type="ssd",
+        gpu_model="",
+        ebay_search_fn=fake_ebay_search,
+        reference_prices={},
+        component_rates=rates,
+        ram_search_fns=[ram_source],
+        storage_search_fns=[storage_source],
+    )
+
+    assert result["breakdown"]["ram"] == {
+        "value": 290.0,
+        "method": "médiane sur 2 annonces neuves",
+    }
+    assert result["breakdown"]["storage"] == {
+        "value": 47.5,
+        "method": "médiane sur 2 annonces neuves",
+    }
 
 
 from estimator import estimate_new_pc_price

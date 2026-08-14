@@ -97,6 +97,8 @@ def estimate_pc(
     ebay_search_fn,
     reference_prices,
     component_rates,
+    ram_search_fns,
+    storage_search_fns,
 ):
     breakdown = {}
     missing = []
@@ -105,11 +107,13 @@ def estimate_pc(
     if breakdown["cpu"] is None:
         missing.append("cpu")
 
-    breakdown["ram"] = estimate_ram(ram_go, ram_type, component_rates)
+    breakdown["ram"] = estimate_ram(ram_go, ram_type, ram_search_fns, component_rates)
     if breakdown["ram"] is None:
         missing.append("ram")
 
-    breakdown["storage"] = estimate_storage(storage_go, storage_type, component_rates)
+    breakdown["storage"] = estimate_storage(
+        storage_go, storage_type, storage_search_fns, component_rates
+    )
     if breakdown["storage"] is None:
         missing.append("storage")
 
