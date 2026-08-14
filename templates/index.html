@@ -3,98 +3,232 @@
 <head>
   <meta charset="utf-8">
   <title>pc-rachat</title>
+  <style>
+    :root {
+      --bg: #1a2233;
+      --bg-field: #0f1521;
+      --border: #2d3a52;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      margin: 0;
+      padding: 32px 16px;
+    }
+    .page {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 24px;
+    }
+    h2 {
+      font-size: 16px;
+      color: var(--accent);
+      margin: 24px 0 8px;
+    }
+    .card {
+      background: var(--bg-field);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .field {
+      margin-bottom: 14px;
+    }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .field input, .field select {
+      width: 100%;
+      background: var(--bg-field);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .field-row {
+      display: flex;
+      gap: 12px;
+    }
+    .field-row .field {
+      flex: 1;
+    }
+    button {
+      width: 100%;
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 700;
+      border: none;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .error {
+      color: #fca5a5;
+      background: #3f1d1d;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .result-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .result-list li {
+      background: var(--bg-field);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .total {
+      font-weight: 700;
+      font-size: 15px;
+      margin-top: 10px;
+    }
+    .warning {
+      color: var(--accent);
+      font-size: 13px;
+    }
+  </style>
 </head>
 <body>
-  <h1>Estimation de rachat PC</h1>
+  <div class="page">
+    <h1>Estimation de rachat PC</h1>
 
-  {% if error %}
-    <p style="color: red;">{{ error }}</p>
-  {% endif %}
-
-  <form method="post">
-    <label>Modèle CPU (ex: i5-10400)
-      <input type="text" name="cpu_model" list="cpu-models" value="{{ form_values.cpu_model if form_values else '' }}">
-      <datalist id="cpu-models">
-        {% for model in cpu_models %}
-          <option value="{{ model }}">
-        {% endfor %}
-      </datalist>
-    </label><br>
-
-    <label>RAM (Go)
-      <input type="text" name="ram_go" value="{{ form_values.ram_go if form_values else '' }}">
-    </label>
-    <label>Type RAM
-      <select name="ram_type">
-        <option value="ddr3" {{ "selected" if form_values and form_values.ram_type == "ddr3" else "" }}>DDR3</option>
-        <option value="ddr4" {{ "selected" if form_values and form_values.ram_type == "ddr4" else "" }}>DDR4</option>
-        <option value="ddr5" {{ "selected" if form_values and form_values.ram_type == "ddr5" else "" }}>DDR5</option>
-      </select>
-    </label><br>
-
-    <label>Stockage (Go)
-      <input type="text" name="storage_go" value="{{ form_values.storage_go if form_values else '' }}">
-    </label>
-    <label>Type stockage
-      <select name="storage_type">
-        <option value="hdd" {{ "selected" if form_values and form_values.storage_type == "hdd" else "" }}>HDD</option>
-        <option value="ssd" {{ "selected" if form_values and form_values.storage_type == "ssd" else "" }}>SSD</option>
-        <option value="nvme" {{ "selected" if form_values and form_values.storage_type == "nvme" else "" }}>NVMe</option>
-      </select>
-    </label><br>
-
-    <label>Modèle GPU (laisser vide si intégré)
-      <input type="text" name="gpu_model" list="gpu-models" value="{{ form_values.gpu_model if form_values else '' }}">
-      <datalist id="gpu-models">
-        {% for model in gpu_models %}
-          <option value="{{ model }}">
-        {% endfor %}
-      </datalist>
-    </label><br>
-
-    <button type="submit">Estimer</button>
-  </form>
-
-  {% if new_pc_price is not none %}
-    <h2>Grille d'achat</h2>
-    <p>Prix neuf équivalent estimé : {{ "%.2f"|format(new_pc_price) }}€</p>
-    <ul>
-      {% for tier in buy_grid %}
-        <li>
-          {% if tier.is_last %}
-            au-delà de {{ "%.2f"|format(tier.max_price) }}€ {{ tier.emoji }} {{ tier.label }}
-          {% else %}
-            jusqu'à {{ "%.2f"|format(tier.max_price) }}€ {{ tier.emoji }} {{ tier.label }}
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
-
-    <h2>Prix de revente visé</h2>
-    <p>{{ "%.2f"|format(resale_target.min) }}€ – {{ "%.2f"|format(resale_target.max) }}€</p>
-  {% elif result %}
-    <p>Grille d'achat non disponible — aucun PC neuf comparable trouvé.</p>
-  {% endif %}
-
-  {% if result %}
-    <h2>Détail par composant</h2>
-    <ul>
-      {% for key, label in [("cpu", "CPU"), ("ram", "RAM"), ("storage", "Stockage"), ("gpu", "GPU")] %}
-        <li>
-          {% if result.breakdown[key] %}
-            {{ label }} : {{ "%.2f"|format(result.breakdown[key].value) }}€ ({{ result.breakdown[key].method }})
-          {% elif key == "gpu" and key not in result.missing %}
-            {{ label }} : non renseigné
-          {% else %}
-            {{ label }} : prix inconnu ⚠
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
-    <p>Total estimé : {{ "%.2f"|format(result.total) }}€</p>
-    {% if result.missing %}
-      <p>⚠ estimation incomplète — composants inconnus : {{ result.missing|join(", ") }}</p>
+    {% if error %}
+      <div class="error">{{ error }}</div>
     {% endif %}
-  {% endif %}
+
+    <div class="card">
+      <form method="post">
+        <div class="field">
+          <label>Modèle CPU (ex: i5-10400)</label>
+          <input type="text" name="cpu_model" list="cpu-models" value="{{ form_values.cpu_model if form_values else '' }}">
+          <datalist id="cpu-models">
+            {% for model in cpu_models %}
+              <option value="{{ model }}">
+            {% endfor %}
+          </datalist>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>RAM (Go)</label>
+            <input type="text" name="ram_go" value="{{ form_values.ram_go if form_values else '' }}">
+          </div>
+          <div class="field">
+            <label>Type RAM</label>
+            <select name="ram_type">
+              <option value="ddr3" {{ "selected" if form_values and form_values.ram_type == "ddr3" else "" }}>DDR3</option>
+              <option value="ddr4" {{ "selected" if form_values and form_values.ram_type == "ddr4" else "" }}>DDR4</option>
+              <option value="ddr5" {{ "selected" if form_values and form_values.ram_type == "ddr5" else "" }}>DDR5</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Stockage (Go)</label>
+            <input type="text" name="storage_go" value="{{ form_values.storage_go if form_values else '' }}">
+          </div>
+          <div class="field">
+            <label>Type stockage</label>
+            <select name="storage_type">
+              <option value="hdd" {{ "selected" if form_values and form_values.storage_type == "hdd" else "" }}>HDD</option>
+              <option value="ssd" {{ "selected" if form_values and form_values.storage_type == "ssd" else "" }}>SSD</option>
+              <option value="nvme" {{ "selected" if form_values and form_values.storage_type == "nvme" else "" }}>NVMe</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Modèle GPU (laisser vide si intégré)</label>
+          <input type="text" name="gpu_model" list="gpu-models" value="{{ form_values.gpu_model if form_values else '' }}">
+          <datalist id="gpu-models">
+            {% for model in gpu_models %}
+              <option value="{{ model }}">
+            {% endfor %}
+          </datalist>
+        </div>
+
+        <button type="submit">Estimer</button>
+      </form>
+    </div>
+
+    {% if new_pc_price is not none %}
+      <h2>Grille d'achat</h2>
+      <div class="card">
+        <p>Prix neuf équivalent estimé : {{ "%.2f"|format(new_pc_price) }}€</p>
+        <ul class="result-list">
+          {% for tier in buy_grid %}
+            <li>
+              {% if tier.is_last %}
+                au-delà de {{ "%.2f"|format(tier.max_price) }}€ {{ tier.emoji }} {{ tier.label }}
+              {% else %}
+                jusqu'à {{ "%.2f"|format(tier.max_price) }}€ {{ tier.emoji }} {{ tier.label }}
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <h2>Prix de revente visé</h2>
+      <div class="card">
+        <p>{{ "%.2f"|format(resale_target.min) }}€ – {{ "%.2f"|format(resale_target.max) }}€</p>
+      </div>
+    {% elif result %}
+      <p class="warning">Grille d'achat non disponible — aucun PC neuf comparable trouvé.</p>
+    {% endif %}
+
+    {% if result %}
+      <h2>Détail par composant</h2>
+      <div class="card">
+        <ul class="result-list">
+          {% for key, label in [("cpu", "CPU"), ("ram", "RAM"), ("storage", "Stockage"), ("gpu", "GPU")] %}
+            <li>
+              {% if result.breakdown[key] %}
+                {{ label }} : {{ "%.2f"|format(result.breakdown[key].value) }}€ ({{ result.breakdown[key].method }})
+              {% elif key == "gpu" and key not in result.missing %}
+                {{ label }} : non renseigné
+              {% else %}
+                {{ label }} : prix inconnu ⚠
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        <p class="total">Total estimé : {{ "%.2f"|format(result.total) }}€</p>
+        {% if result.missing %}
+          <p class="warning">⚠ estimation incomplète — composants inconnus : {{ result.missing|join(", ") }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
 </body>
 </html>

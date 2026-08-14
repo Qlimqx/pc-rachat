@@ -111,3 +111,13 @@ def test_index_get_shows_cpu_and_gpu_datalists_with_options():
     assert b'<datalist id="gpu-models">' in response.data
     assert "Ryzen 7 5700X".encode("utf-8") in response.data
     assert "RTX 4060".encode("utf-8") in response.data
+
+
+def test_index_get_includes_dark_theme_stylesheet():
+    client = flask_app_module.app.test_client()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert b"<style>" in response.data
+    assert b"#1a2233" in response.data
