@@ -43,6 +43,19 @@ python cli.py
 
 Le script te demande le modèle du CPU, la taille et le type de RAM, la taille et le type de stockage, puis le modèle du GPU (laisse vide si carte graphique intégrée). Il affiche ensuite le détail par composant et le total estimé.
 
+## Déploiement sur Render
+
+L'appli web (`app.py`) est prête à être déployée sur [Render](https://render.com/) :
+
+1. Connecte ton compte Render à GitHub et sélectionne ce repo.
+2. Render détecte automatiquement `render.yaml` (Blueprint) — sinon, configure manuellement :
+   - Build command : `pip install -r requirements.txt`
+   - Start command : `gunicorn app:app`
+3. Dans les paramètres du service Render, ajoute tes variables d'environnement : `EBAY_CLIENT_ID` et `EBAY_CLIENT_SECRET` (les mêmes valeurs que dans ton `.env` local — voir la section eBay ci-dessus).
+4. Déploie. Render te donne une URL publique (`https://<nom-du-service>.onrender.com`).
+
+Sans ces variables configurées sur Render, l'appli fonctionne quand même pour le détail par composant (table de référence locale), mais la recherche eBay est désactivée jusqu'à ce que les clés soient ajoutées.
+
 ## Personnaliser les données
 
 - `data/reference_prices.json` : ajoute/ajuste les prix de secours pour les CPU/GPU que tu rachètes souvent.
@@ -60,3 +73,5 @@ pytest -v
 - Pas de scraping leboncoin (bloqué par leur protection anti-bot et contraire à leurs CGU).
 - Pas de coefficient d'état du PC (esthétique, usure) ni de calcul de marge automatique — ces décisions restent manuelles.
 - Pas de cache du token eBay, et pas de distinction entre "eBay n'a rien trouvé" et "l'appel à eBay a échoué" (identifiants invalides, panne réseau, quota dépassé) : dans les deux cas, l'outil bascule silencieusement sur la table de référence locale sans le signaler.
+- La grille d'achat et l'objectif de revente reposent sur un prix de "PC neuf équivalent" obtenu en interrogeant 7 sites marchands (`retailers/`) plus eBay ; si aucune de ces 8 sources ne renvoie de résultat exploitable, la grille est tout simplement omise du résultat.
+- Ces 7 sites marchands sont scrapés sans API officielle, sur des pages dont la structure peut changer à tout moment : comme pour eBay, si l'un d'eux cesse de fonctionner suite à une refonte de son site, l'outil bascule silencieusement sur les autres sources disponibles, sans message d'erreur distinct.
