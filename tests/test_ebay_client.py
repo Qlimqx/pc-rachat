@@ -147,3 +147,42 @@ def test_search_new_pc_prices_returns_empty_list_on_search_failure(mock_token, m
     mock_token.return_value = "tok"
     result = search_new_pc_prices("Ryzen 7 5700X", "RTX 4060", "id", "secret")
     assert result == []
+
+
+from ebay_client import search_ram_prices, search_storage_prices
+
+
+@patch("ebay_client.search_new_prices")
+@patch("ebay_client.get_access_token")
+def test_search_ram_prices_returns_prices_on_success(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = [280.0, 300.0]
+
+    result = search_ram_prices(32, "ddr5", "id", "secret")
+
+    assert result == [280.0, 300.0]
+    mock_search.assert_called_once_with("32Go ddr5 RAM", "tok")
+
+
+@patch("ebay_client.get_access_token", side_effect=Exception("network error"))
+def test_search_ram_prices_returns_empty_list_on_failure(mock_token):
+    result = search_ram_prices(32, "ddr5", "id", "secret")
+    assert result == []
+
+
+@patch("ebay_client.search_new_prices")
+@patch("ebay_client.get_access_token")
+def test_search_storage_prices_returns_prices_on_success(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = [45.0, 50.0]
+
+    result = search_storage_prices(512, "ssd", "id", "secret")
+
+    assert result == [45.0, 50.0]
+    mock_search.assert_called_once_with("512Go ssd", "tok")
+
+
+@patch("ebay_client.get_access_token", side_effect=Exception("network error"))
+def test_search_storage_prices_returns_empty_list_on_failure(mock_token):
+    result = search_storage_prices(512, "ssd", "id", "secret")
+    assert result == []

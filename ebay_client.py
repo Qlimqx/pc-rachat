@@ -64,3 +64,19 @@ def search_new_pc_prices(cpu_model, gpu_model, client_id, client_secret):
         return search_new_prices(f"{cpu_model} {gpu_model} PC", token)
     except Exception:
         return []
+
+
+def search_ram_prices(ram_go, ram_type, client_id, client_secret):
+    try:
+        token = get_access_token(client_id, client_secret)
+        return search_new_prices(f"{ram_go}Go {ram_type} RAM", token)
+    except Exception:
+        return []
+
+
+def search_storage_prices(storage_go, storage_type, client_id, client_secret):
+    try:
+        token = get_access_token(client_id, client_secret)
+        return search_new_prices(f"{storage_go}Go {storage_type}", token)
+    except Exception:
+        return []
