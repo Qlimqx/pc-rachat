@@ -198,6 +198,15 @@ def test_estimate_new_pc_price_returns_none_when_all_sources_empty():
     assert result is None
 
 
+def test_estimate_new_pc_price_returns_none_with_no_search_fns():
+    # Regression test: ThreadPoolExecutor(max_workers=0) raises ValueError,
+    # so estimate_new_pc_price must guard against an empty search_fns list
+    # rather than constructing an executor with zero workers.
+    result = estimate_new_pc_price("cpu", "gpu", [])
+
+    assert result is None
+
+
 def test_estimate_new_pc_price_works_with_a_single_source():
     def only_source(cpu_model, gpu_model):
         return [999.0]
