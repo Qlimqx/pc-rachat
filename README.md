@@ -5,7 +5,7 @@ Outil en ligne de commande pour estimer la valeur de marché des composants d'un
 L'estimation combine :
 - **eBay Browse API** (annonces d'occasion, médiane des prix trouvés) en priorité pour le CPU et le GPU
 - une **table de référence locale** (`data/reference_prices.json`) en secours si eBay ne trouve rien
-- une **formule €/Go** (`data/component_rates.json`) pour la RAM et le stockage
+- pour la RAM et le stockage : une recherche de **prix marché** (médiane sur eBay + 7 revendeurs français — LDLC, PcComponentes, Materiel.net, TopAchat, Grosbill, Rue du Commerce, Amazon), avec repli sur une **formule €/Go** (`data/component_rates.json`) si aucune source ne trouve de résultat
 
 Le résultat donne le détail par composant et un total. La marge de revente et l'ajustement selon l'état du PC restent à ta charge — l'outil n'estime que la valeur marché des pièces.
 
@@ -67,7 +67,7 @@ Sans ces variables configurées sur Render, l'appli fonctionne quand même pour 
 ## Personnaliser les données
 
 - `data/reference_prices.json` : ajoute/ajuste les prix de secours pour les CPU/GPU que tu rachètes souvent.
-- `data/component_rates.json` : ajuste les taux €/Go pour la RAM et le stockage selon le marché actuel.
+- `data/component_rates.json` : ajuste les taux €/Go de secours pour la RAM et le stockage, utilisés uniquement si aucune des 8 sources de prix marché ne trouve de résultat.
 
 ## Tests
 

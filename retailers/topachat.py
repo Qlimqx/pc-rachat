@@ -107,5 +107,12 @@ def search_storage_prices(storage_go, storage_type):
     # the no-match case) rather than real hard-drive prices. Flagging this
     # loudly rather than silently mismatching -- fix separately if HDD
     # pricing from TopAchat is needed.
+    #
+    # Same gap applies to "nvme": as noted above, NVMe drives are for real
+    # filed under the "SSD" category here, not a separate "NVME" one -- so
+    # search_storage_prices(x, "nvme") passes category_label="nvme", which
+    # never matches the real "SSD" label and this retailer contributes
+    # nothing for nvme queries either (again degrading gracefully to an
+    # empty list, not wrong prices). Only "ssd" is correctly wired for now.
     query = f"{storage_go}Go {storage_type}"
     return _search(query, storage_type)
