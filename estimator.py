@@ -14,33 +14,37 @@ def _estimate_by_rate(size_go, component_type, rates, category):
     return {"value": round(size_go * rate, 2), "method": "formule €/Go"}
 
 
-def _run_search_fn_safely(search_fn, arg1, arg2):
+def _run_search_fn_safely(search_fn, *args):
     # search_fns aren't supposed to raise (each source is expected to fail
     # silently and return []), but a single misbehaving source shouldn't be
     # able to take down the whole aggregation, so we defend here too. Shared
     # across every multi-source aggregation in this module (new-PC price,
-    # RAM, storage) since every search_fn takes exactly two positional args.
+    # RAM, storage, CPU, GPU) -- *args lets this work whether the search_fn
+    # takes one positional arg (a component model) or two (size + type,
+    # cpu_model + gpu_model).
     try:
-        return search_fn(arg1, arg2)
+        return search_fn(*args)
     except Exception:
         return []
 
 
-def _aggregate_market_prices(arg1, arg2, search_fns):
-    # Shared by estimate_new_pc_price/estimate_ram/estimate_storage: run every
-    # search_fn concurrently and merge whatever prices they find. Every
-    # search_fn does blocking network I/O (requests.get(..., timeout=10)), so
-    # calling them sequentially means worst-case wall-clock time is the SUM of
-    # all their timeouts. Threads give real concurrency here because Python
-    # releases the GIL during blocking I/O, so worst-case wall-clock time
-    # instead becomes the slowest single source.
+def _aggregate_market_prices(search_fns, *args):
+    # Shared by estimate_new_pc_price/estimate_ram/estimate_storage/
+    # estimate_component: run every search_fn concurrently and merge
+    # whatever prices they find. Every search_fn does blocking network I/O
+    # (requests.get(..., timeout=10)), so calling them sequentially means
+    # worst-case wall-clock time is the SUM of all their timeouts. Threads
+    # give real concurrency here because Python releases the GIL during
+    # blocking I/O, so worst-case wall-clock time instead becomes the
+    # slowest single source. search_fns comes first (not last) so *args can
+    # capture a variable number of trailing arguments cleanly.
     search_fns = list(search_fns)
     all_prices = []
 
     if search_fns:
         with ThreadPoolExecutor(max_workers=len(search_fns)) as executor:
             futures = [
-                executor.submit(_run_search_fn_safely, search_fn, arg1, arg2)
+                executor.submit(_run_search_fn_safely, search_fn, *args)
                 for search_fn in search_fns
             ]
             for future in futures:
@@ -50,7 +54,7 @@ def _aggregate_market_prices(arg1, arg2, search_fns):
 
 
 def estimate_ram(size_go, ram_type, search_fns, rates):
-    all_prices = _aggregate_market_prices(size_go, ram_type, search_fns)
+    all_prices = _aggregate_market_prices(search_fns, size_go, ram_type)
     if all_prices:
         return {
             "value": median_price(all_prices),
@@ -60,7 +64,7 @@ def estimate_ram(size_go, ram_type, search_fns, rates):
 
 
 def estimate_storage(size_go, storage_type, search_fns, rates):
-    all_prices = _aggregate_market_prices(size_go, storage_type, search_fns)
+    all_prices = _aggregate_market_prices(search_fns, size_go, storage_type)
     if all_prices:
         return {
             "value": median_price(all_prices),
@@ -131,7 +135,7 @@ def estimate_pc(
 
 
 def estimate_new_pc_price(cpu_model, gpu_model, search_fns):
-    all_prices = _aggregate_market_prices(cpu_model, gpu_model, search_fns)
+    all_prices = _aggregate_market_prices(search_fns, cpu_model, gpu_model)
 
     if not all_prices:
         return None
