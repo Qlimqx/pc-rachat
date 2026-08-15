@@ -1,6 +1,6 @@
 from unittest.mock import patch, Mock
 
-from retailers.amazon import search_prices
+from retailers.amazon import search_prices, search_ram_prices, search_storage_prices
 
 
 @patch("retailers.amazon.requests.get")
@@ -97,3 +97,143 @@ def test_search_prices_query_includes_both_cpu_and_gpu_model(mock_get):
     args, kwargs = mock_get.call_args
     assert args[0] == "https://www.amazon.fr/s"
     assert kwargs["params"] == {"k": "Ryzen 7 5700X RTX 4060"}
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_ram_prices_handles_the_real_fixture_without_crashing(mock_get):
+    # tests/fixtures/amazon_ram_search.html is the actual, unmodified
+    # response body a live `requests.get()` (same headers this module
+    # sends) got back from https://www.amazon.fr/s?k=16Go+DDR4 : HTTP 200
+    # with an Akamai Bot Manager "bm-verify" interstitial page (a
+    # <meta http-equiv="refresh"> redirect loop plus a JS proof-of-work
+    # challenge), not a product listing -- a different bot-mitigation
+    # mechanism than the AWS WAF challenge documented for search_prices,
+    # but the same accepted, expected "blocked, no real data" outcome.
+    with open("tests/fixtures/amazon_ram_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_ram_prices(16, "DDR4")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == []
+
+
+@patch("retailers.amazon.requests.get", side_effect=Exception("network error"))
+def test_search_ram_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_ram_prices(16, "DDR4") == []
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_ram_prices_query_includes_go_and_type(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_ram_prices(16, "DDR4")
+
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://www.amazon.fr/s"
+    assert kwargs["params"] == {"k": "16Go DDR4"}
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_ram_prices_extracts_prices_without_title_filtering(mock_get):
+    # No live noise data came back (see fixture-based test above), so --
+    # mirroring Rue du Commerce's Task 9 default -- no title-relevance
+    # filter is applied to RAM results; every card with a parseable price
+    # counts, regardless of title content.
+    html = """
+    <html><body>
+    <div data-component-type="s-search-result">
+      <h2><span>Corsair Vengeance 16Go DDR4 3200MHz</span></h2>
+      <div class="a-price"><span class="a-offscreen">54,99&#8364;</span></div>
+    </div>
+    <div data-component-type="s-search-result">
+      <h2><span>Totally unrelated title</span></h2>
+      <div class="a-price"><span class="a-offscreen">1&nbsp;399,90&#8364;</span></div>
+    </div>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_ram_prices(16, "DDR4")
+
+    assert prices == [54.99, 1399.9]
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_storage_prices_handles_the_real_fixture_without_crashing(mock_get):
+    # tests/fixtures/amazon_storage_search.html is the actual, unmodified
+    # response body a live `requests.get()` (same headers this module
+    # sends) got back from https://www.amazon.fr/s?k=512Go+SSD -- the same
+    # Akamai Bot Manager "bm-verify" interstitial as the RAM fixture above,
+    # no product data.
+    with open("tests/fixtures/amazon_storage_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_storage_prices(512, "SSD")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == []
+
+
+@patch("retailers.amazon.requests.get", side_effect=Exception("network error"))
+def test_search_storage_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_storage_prices(512, "SSD") == []
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_storage_prices_query_includes_go_and_type(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_storage_prices(512, "SSD")
+
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://www.amazon.fr/s"
+    assert kwargs["params"] == {"k": "512Go SSD"}
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_storage_prices_extracts_prices_without_title_filtering(mock_get):
+    # No live noise data came back (see fixture-based test above), so --
+    # mirroring Rue du Commerce's Task 9 default -- no title-relevance
+    # filter is applied to storage results.
+    html = """
+    <html><body>
+    <div data-component-type="s-search-result">
+      <h2><span>Samsung SSD 512Go interne</span></h2>
+      <div class="a-price"><span class="a-offscreen">39,99&#8364;</span></div>
+    </div>
+    <div data-component-type="s-search-result">
+      <h2><span>Totally unrelated title</span></h2>
+      <div class="a-price"><span class="a-offscreen">49,00&#8364;</span></div>
+    </div>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_storage_prices(512, "SSD")
+
+    assert prices == [39.99, 49.0]

@@ -88,6 +88,51 @@ def _title_matches_model(title, model):
     return True
 
 
+def _fetch_soup(query):
+    """Run an Amazon.fr search for `query` and return the parsed result
+    page.
+
+    Amazon.fr's search is a classic server-rendered `/s?k=...` page --
+    verified live via network inspection, no separate JSON API involved.
+    Raises on network failure or a non-2xx response -- callers are expected
+    to catch that and translate it into an empty price list, matching every
+    other retailer module's contract. Note a 202 (the AWS WAF bot-challenge
+    response documented at the top of this module) does not raise here --
+    `raise_for_status()` only raises on 4xx/5xx -- so a blocked request
+    falls through to soup-parsing an unparseable challenge page, which
+    naturally yields zero cards and an empty price list.
+    """
+    response = requests.get(
+        SEARCH_URL, params={"k": query}, headers=HEADERS, timeout=10
+    )
+    response.raise_for_status()
+    return BeautifulSoup(response.text, "html.parser")
+
+
+def _extract_card_price(card):
+    """Extract the float price from a single search-result card (a
+    `div[data-component-type="s-search-result"]`), or None if no usable
+    price is present. Price text lives in `.a-price .a-offscreen` and uses
+    a non-breaking space as the thousands separator, a comma as the decimal
+    separator, and a trailing euro sign (e.g. "1\xa0399,90€").
+    """
+    price_el = card.select_one(".a-price .a-offscreen")
+    if price_el is None:
+        return None
+    raw_price = (
+        price_el.get_text(strip=True)
+        .replace("\xa0", "")
+        .replace(" ", "")
+        .replace("€", "")
+        .replace(",", ".")
+        .strip()
+    )
+    try:
+        return float(raw_price)
+    except ValueError:
+        return None
+
+
 def search_prices(cpu_model, gpu_model):
     try:
         # Kept both models in the query, same as PcComponentes/TopAchat/Rue
@@ -96,11 +141,7 @@ def search_prices(cpu_model, gpu_model):
         # returns zero results for a combined CPU+GPU search). It just ranks
         # loosely, hence the title-relevance filter below.
         query = f"{cpu_model} {gpu_model}"
-        response = requests.get(
-            SEARCH_URL, params={"k": query}, headers=HEADERS, timeout=10
-        )
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = _fetch_soup(query)
 
         prices = []
         for card in soup.select('div[data-component-type="s-search-result"]'):
@@ -111,22 +152,61 @@ def search_prices(cpu_model, gpu_model):
                 and _title_matches_model(title, gpu_model)
             ):
                 continue
-            price_el = card.select_one(".a-price .a-offscreen")
-            if price_el is None:
-                continue
-            raw_price = (
-                price_el.get_text(strip=True)
-                .replace("\xa0", "")
-                .replace(" ", "")
-                .replace("€", "")
-                .replace(",", ".")
-                .strip()
-            )
-            try:
-                price = float(raw_price)
-            except ValueError:
-                continue
-            prices.append(price)
+            price = _extract_card_price(card)
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
+
+
+def search_ram_prices(ram_go, ram_type):
+    try:
+        # Live-researched (2026-08-15) against https://www.amazon.fr/s for
+        # "16Go DDR4" and "512Go SSD" (see search_storage_prices below for
+        # the latter): both requests were blocked by Amazon's anti-bot
+        # protection before any product data was returned -- this time an
+        # Akamai Bot Manager "bm-verify" interstitial (HTTP 200, a
+        # `<meta http-equiv="refresh">` redirect loop plus a JS
+        # proof-of-work challenge, no `s-search-result` cards at all),
+        # rather than the AWS WAF challenge documented at the top of this
+        # module for the CPU+GPU query -- Amazon appears to front different
+        # bot-mitigation vendors/paths depending on the query, IP
+        # reputation, or request rate. Either way it's the same accepted,
+        # expected outcome: no real product data, no CAPTCHA-solving or
+        # bot-evasion added. That response is saved verbatim as
+        # tests/fixtures/amazon_ram_search.html. Since no real results ever
+        # came back, there's no live noise data to justify a
+        # title-relevance filter one way or the other -- mirroring Rue du
+        # Commerce's Task 9 default, no filter is applied here.
+        soup = _fetch_soup(f"{ram_go}Go {ram_type}")
+
+        prices = []
+        for card in soup.select('div[data-component-type="s-search-result"]'):
+            price = _extract_card_price(card)
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
+
+
+def search_storage_prices(storage_go, storage_type):
+    try:
+        # Live-researched (2026-08-15) against https://www.amazon.fr/s for
+        # "512Go SSD" -- same outcome and same Akamai "bm-verify"
+        # interstitial response as search_ram_prices above, saved verbatim
+        # as tests/fixtures/amazon_storage_search.html. No real product
+        # data came back, so -- same reasoning as search_ram_prices -- no
+        # title-relevance filter is applied here either, mirroring Rue du
+        # Commerce's Task 9 default.
+        soup = _fetch_soup(f"{storage_go}Go {storage_type}")
+
+        prices = []
+        for card in soup.select('div[data-component-type="s-search-result"]'):
+            price = _extract_card_price(card)
+            if price is not None:
+                prices.append(price)
         return prices
     except Exception:
         return []
