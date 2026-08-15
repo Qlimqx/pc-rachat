@@ -199,6 +199,97 @@ def search_ram_prices(ram_go, ram_type):
         return []
 
 
+def search_cpu_prices(cpu_model):
+    try:
+        # Tried a bare model query first (e.g. "Ryzen 7 9800X3D"): verified
+        # live and against the fixture, 48/48 results are "PC" category
+        # prebuilts/laptops that merely contain this CPU -- only 3/48 (~6%)
+        # are genuine standalone CPU listings, ~94% noise, far past the
+        # ~30% threshold that would tolerate leaving it unanchored (same
+        # whole-machine pollution pattern search_ram_prices/
+        # search_storage_prices had to anchor away, just far worse here).
+        # Prefixing with "Processeur" (same category-anchor idea as
+        # grosbill.py's search_cpu_prices) fixes that: verified live and
+        # against the real fixture, 12/12 results are standalone CPU
+        # listings, 0% whole-machine pollution. But 8/12 (~67%) of those are
+        # a *different* Ryzen X3D SKU that the anchored query still returns
+        # (9850X3D, 5800X3D, 7800X3D, and a "7800X3D Bundle The Force"
+        # motherboard kit) -- well past the ~30% threshold, so
+        # _title_matches_model is applied to drop them; a plain substring
+        # check already rejects all of them since their model numbers don't
+        # textually contain "9800X3D" as a substring.
+        #
+        # On top of that, one of the 4 titles that DO match "9800X3D" is a
+        # "Reconditionné" (refurbished/used) listing -- verified against the
+        # fixture, a <span class="label label--reconditioned"> marker sits
+        # as a sibling of the title inside the card, not inside the title
+        # text itself, so _title_matches_model's text-only check can't catch
+        # it (unlike Materiel.net's "- Occasion" suffix, which IS in the
+        # title text). This function exists to source *new* market prices
+        # ahead of the eBay occasion fallback (see estimator.py), so cards
+        # carrying that marker are skipped outright, the same "keep neuf/
+        # occasion split intact" reasoning materiel_net.py's
+        # _title_matches_model uses for its in-title "occasion" check. Net:
+        # 3 genuine new "Ryzen 7 9800X3D" listings kept, 1 reconditioned + 8
+        # wrong-SKU listings correctly dropped.
+        soup = _fetch_soup(f"Processeur {cpu_model}")
+        prices = []
+        for card in soup.select("li.pdt-item"):
+            if card.select_one(".label--reconditioned") is not None:
+                continue
+            title_el = card.select_one("h3.title-3")
+            title = title_el.get_text(strip=True) if title_el else ""
+            if not _title_matches_model(title, cpu_model):
+                continue
+            price = _extract_card_price(card)
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
+
+
+def search_gpu_prices(gpu_model):
+    try:
+        # Tried a bare model query first (e.g. "RTX 5070 Ti"): verified live
+        # and against the fixture, 48 results but only 22/48 (~46%) are
+        # genuine standalone cards -- the other 26 are "PC"-category
+        # prebuilts/gaming laptops that merely include this GPU (~54%
+        # noise). Prefixing with "Carte graphique" (same category-anchor
+        # idea as search_cpu_prices' "Processeur" prefix, and grosbill.py's
+        # identical GPU prefix) fixes it: verified live and against the real
+        # fixture, 22/22 results are genuine standalone RTX 5070 Ti cards,
+        # 0% whole-machine pollution and 0% wrong-tier noise (no "Ti Super"
+        # or plain non-Ti "RTX 5070" near-misses turned up in this fixture,
+        # unlike LDLC's/Materiel.net's GPU searches).
+        #
+        # No reconditioned/"occasion" listings turned up in this particular
+        # fixture either, but the marketplace-wide <span class="label
+        # label--reconditioned"> marker (see search_cpu_prices above) is a
+        # site-wide feature, not specific to CPUs -- verified live, the same
+        # "Reconditionnés" nav link/category exists for graphics cards too
+        # -- so the same reconditioned-card skip and _title_matches_model
+        # suffix-boundary check are applied here as cheap insurance against
+        # a future query/page where a used card or wrong-tier variant does
+        # show up, same reasoning grosbill.py's search_cpu_prices keeps its
+        # filter for despite 0% observed noise there.
+        soup = _fetch_soup(f"Carte graphique {gpu_model}")
+        prices = []
+        for card in soup.select("li.pdt-item"):
+            if card.select_one(".label--reconditioned") is not None:
+                continue
+            title_el = card.select_one("h3.title-3")
+            title = title_el.get_text(strip=True) if title_el else ""
+            if not _title_matches_model(title, gpu_model):
+                continue
+            price = _extract_card_price(card)
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
+
+
 def search_storage_prices(storage_go, storage_type):
     try:
         # Tried a bare "{go}Go {type}" query first (e.g. "512Go SSD"):

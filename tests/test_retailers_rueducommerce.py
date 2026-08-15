@@ -1,6 +1,12 @@
 from unittest.mock import patch, Mock
 
-from retailers.rueducommerce import search_prices, search_ram_prices, search_storage_prices
+from retailers.rueducommerce import (
+    search_prices,
+    search_ram_prices,
+    search_storage_prices,
+    search_cpu_prices,
+    search_gpu_prices,
+)
 
 
 # Filtered to the 12/48 fixture cards whose title actually references both
@@ -245,4 +251,257 @@ def test_search_storage_prices_query_uses_interne_qualifier(mock_get):
     assert (
         args[0]
         == "https://www.rueducommerce.fr/recherche/ssd%20interne%20512Go/"
+    )
+
+
+# 3/12 fixture cards genuinely match "Ryzen 7 9800X3D": recomputed by running
+# the filtering logic in retailers/rueducommerce.py's search_cpu_prices
+# against the real fixture. The other 9 are dropped -- 8 are a different
+# Ryzen X3D SKU (9850X3D/5800X3D/7800X3D, including a "7800X3D Bundle The
+# Force" motherboard kit) that _title_matches_model's substring check
+# rejects, and 1 is a genuine "Ryzen 7 9800X3D" listing carrying a
+# <span class="label label--reconditioned"> marker that the reconditioned
+# skip drops (see search_cpu_prices' comment).
+EXPECTED_CPU_PRICES = [469.99, 451.0, 3292.95]
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_cpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/rueducommerce_cpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == EXPECTED_CPU_PRICES
+
+
+@patch("retailers.rueducommerce.requests.get", side_effect=Exception("network error"))
+def test_search_cpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_cpu_prices("Ryzen 7 9800X3D") == []
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_cpu_prices_returns_empty_list_on_unparseable_html(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    assert search_cpu_prices("Ryzen 7 9800X3D") == []
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_cpu_prices_rejects_reconditioned_listing(mock_get):
+    # Regression test for the reconditioned-card skip: a card whose title
+    # genuinely matches the requested model but carries a
+    # <span class="label label--reconditioned"> marker (RdC's used/
+    # refurbished-listing badge, verified live and against the real fixture
+    # -- it sits as a sibling of the title inside the card, not inside the
+    # title text, so it can't be caught by a title-only check) must be
+    # dropped so used prices don't leak into this new-market search.
+    html = """
+    <html><body>
+    <li class="pdt-item">
+      <div class="listing-product__infos">
+        <span class="label label--reconditioned">Reconditionn&#233;</span>
+        <h3 class="title-3">AMD Ryzen 7 9800X3D (4.7 GHz / 5.2 GHz)</h3>
+      </div>
+      <div class="price"><div class="new-price">434,52&#8364;</div></div>
+    </li>
+    <li class="pdt-item">
+      <div class="listing-product__infos">
+        <h3 class="title-3">AMD Ryzen 7 9800X3D (4.7 GHz / 5.2 GHz)</h3>
+      </div>
+      <div class="price"><div class="new-price">469,99&#8364;</div></div>
+    </li>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert prices == [469.99]
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_cpu_prices_rejects_different_x3d_sku(mock_get):
+    # Regression test for the title-relevance filter: a different Ryzen X3D
+    # SKU that the "Processeur"-anchored query still returns alongside the
+    # requested model (verified live: 9850X3D/5800X3D/7800X3D all show up
+    # for a "Processeur Ryzen 7 9800X3D" search) must not have its price
+    # counted.
+    html = """
+    <html><body>
+    <li class="pdt-item">
+      <h3 class="title-3">AMD Ryzen 7 9850X3D (4.7 GHz / 5.6 GHz)</h3>
+      <div class="price"><div class="new-price">489,99&#8364;</div></div>
+    </li>
+    <li class="pdt-item">
+      <h3 class="title-3">AMD Ryzen 7 9800X3D (4.7 GHz / 5.2 GHz)</h3>
+      <div class="price"><div class="new-price">469,99&#8364;</div></div>
+    </li>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert prices == [469.99]
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_cpu_prices_query_uses_processeur_prefix(mock_get):
+    # Regression test for the CPU query wording: verified live that a bare
+    # "Ryzen 7 9800X3D" query is ~94% noise (whole "PC" prebuilts/laptops
+    # that merely contain this CPU). Only prefixing with "Processeur"
+    # anchors the search to the standalone-CPU category, so the exact query
+    # wording matters and is worth pinning down with a regression test.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_cpu_prices("Ryzen 7 9800X3D")
+
+    args, kwargs = mock_get.call_args
+    assert (
+        args[0]
+        == "https://www.rueducommerce.fr/recherche/Processeur%20Ryzen%207%209800X3D/"
+    )
+
+
+# 22/22 fixture cards genuinely match "RTX 5070 Ti": recomputed by running
+# the filtering logic in retailers/rueducommerce.py's search_gpu_prices
+# against the real fixture.
+EXPECTED_GPU_PRICES = [
+    1466.1, 1159.99, 1379.99, 1299.99, 1235.92, 1399.99, 1322.26, 1249.99,
+    1565.89, 1219.36, 1299.99, 1379.99, 1382.92, 1299.99, 1249.99, 1299.99,
+    1299.99, 1481.54, 1459.99, 1590.8, 1792.99, 1492.2,
+]
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_gpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/rueducommerce_gpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == EXPECTED_GPU_PRICES
+
+
+@patch("retailers.rueducommerce.requests.get", side_effect=Exception("network error"))
+def test_search_gpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_gpu_prices("RTX 5070 Ti") == []
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_gpu_prices_returns_empty_list_on_unparseable_html(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    assert search_gpu_prices("RTX 5070 Ti") == []
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_gpu_prices_rejects_reconditioned_listing(mock_get):
+    # Regression test for the reconditioned-card skip applied defensively to
+    # search_gpu_prices too -- see search_cpu_prices' identical test for why
+    # the marker can't be caught via title text alone.
+    html = """
+    <html><body>
+    <li class="pdt-item">
+      <div class="listing-product__infos">
+        <span class="label label--reconditioned">Reconditionn&#233;</span>
+        <h3 class="title-3">MSI GeForce RTX 5070 Ti 16G GAMING TRIO OC</h3>
+      </div>
+      <div class="price"><div class="new-price">1199,00&#8364;</div></div>
+    </li>
+    <li class="pdt-item">
+      <div class="listing-product__infos">
+        <h3 class="title-3">MSI GeForce RTX 5070 Ti 16G GAMING TRIO OC</h3>
+      </div>
+      <div class="price"><div class="new-price">1379,99&#8364;</div></div>
+    </li>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert prices == [1379.99]
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_gpu_prices_rejects_space_separated_near_miss_suffix(mock_get):
+    # Regression test mirroring search_prices' equivalent test: a near-miss
+    # tier variant (e.g. a hypothetical "RTX 5070 Ti Super") must be
+    # rejected by the same suffix-boundary check, kept here as insurance
+    # even though 0/22 fixture cards exercised it live.
+    html = """
+    <html><body>
+    <li class="pdt-item">
+      <h3 class="title-3">Gigabyte GeForce RTX 5070 Ti Super WINDFORCE OC 16G</h3>
+      <div class="price"><div class="new-price">1699,99&#8364;</div></div>
+    </li>
+    <li class="pdt-item">
+      <h3 class="title-3">Gigabyte GeForce RTX 5070 Ti WINDFORCE OC 16G</h3>
+      <div class="price"><div class="new-price">1299,99&#8364;</div></div>
+    </li>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert prices == [1299.99]
+
+
+@patch("retailers.rueducommerce.requests.get")
+def test_search_gpu_prices_query_uses_carte_graphique_prefix(mock_get):
+    # Regression test for the GPU query wording: verified live that a bare
+    # "RTX 5070 Ti" query is ~54% noise (whole "PC" prebuilts/gaming
+    # laptops that merely contain this GPU). Only prefixing with "Carte
+    # graphique" anchors the search to the standalone-GPU category, so the
+    # exact query wording matters and is worth pinning down with a
+    # regression test.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_gpu_prices("RTX 5070 Ti")
+
+    args, kwargs = mock_get.call_args
+    assert (
+        args[0]
+        == "https://www.rueducommerce.fr/recherche/Carte%20graphique%20RTX%205070%20Ti/"
     )
