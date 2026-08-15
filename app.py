@@ -74,7 +74,7 @@ def index():
                 new_pc_price = new_pc_result["value"]
                 sell_grid = estimator.estimate_sell_grid(new_pc_price, sell_tiers)
                 buy_grid = estimator.estimate_buy_grid(
-                    sell_grid[-1]["price"], buy_tiers, buy_margin["min_margin_eur"]
+                    sell_grid[0]["price"], buy_tiers, buy_margin["min_margin_pct"]
                 )
 
     return render_template(

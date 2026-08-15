@@ -448,20 +448,20 @@ def test_estimate_new_pc_price_calls_sources_concurrently():
 from estimator import estimate_sell_grid
 
 
-def test_estimate_sell_grid_computes_price_per_percentage():
+def test_estimate_sell_grid_computes_new_price_minus_discount():
     result = estimate_sell_grid(1000.0, [0.10, 0.20, 0.30])
 
     assert result == [
-        {"pct": 0.10, "price": 100.0},
-        {"pct": 0.20, "price": 200.0},
-        {"pct": 0.30, "price": 300.0},
+        {"pct": 0.10, "price": 900.0},
+        {"pct": 0.20, "price": 800.0},
+        {"pct": 0.30, "price": 700.0},
     ]
 
 
 def test_estimate_sell_grid_rounds_to_two_decimals():
     result = estimate_sell_grid(999.0, [0.10])
 
-    assert result == [{"pct": 0.10, "price": 99.9}]
+    assert result == [{"pct": 0.10, "price": 899.1}]
 
 
 from estimator import estimate_buy_grid
@@ -474,12 +474,12 @@ def test_estimate_buy_grid_computes_price_per_tier():
         {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"},
     ]
 
-    result = estimate_buy_grid(1000.0, tiers, 50)
+    result = estimate_buy_grid(1000.0, tiers, 0.20)
 
     assert result == [
         {"max_price": 400.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
         {"max_price": 440.0, "emoji": "✅", "label": "Intéressant", "is_last": False},
-        {"max_price": 950.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+        {"max_price": 800.0, "emoji": "❌", "label": "Je passe", "is_last": True},
     ]
 
 
@@ -490,19 +490,19 @@ def test_estimate_buy_grid_caps_tiers_at_margin_floor():
         {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"},
     ]
 
-    result = estimate_buy_grid(300.0, tiers, 200)
+    result = estimate_buy_grid(300.0, tiers, 0.70)
 
     assert result == [
         {"max_price": 30.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
-        {"max_price": 100.0, "emoji": "🔴", "label": "Marge faible", "is_last": False},
-        {"max_price": 100.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+        {"max_price": 90.0, "emoji": "🔴", "label": "Marge faible", "is_last": False},
+        {"max_price": 90.0, "emoji": "❌", "label": "Je passe", "is_last": True},
     ]
 
 
 def test_estimate_buy_grid_floors_ceiling_at_zero():
     tiers = [{"max_pct": 1.00, "emoji": "❌", "label": "Je passe"}]
 
-    result = estimate_buy_grid(100.0, tiers, 200)
+    result = estimate_buy_grid(100.0, tiers, 1.20)
 
     assert result == [{"max_price": 0.0, "emoji": "❌", "label": "Je passe", "is_last": True}]
 

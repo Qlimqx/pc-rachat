@@ -167,19 +167,22 @@ def _round2(value):
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def estimate_sell_grid(new_pc_price, percentages):
+def estimate_sell_grid(new_pc_price, discount_percentages):
+    # Each entry is "neuf minus X%" (a discount off the new-PC price), not a
+    # straight percentage of it -- e.g. pct=0.10 means 90% of new_pc_price.
     return [
-        {"pct": pct, "price": _round2(new_pc_price * pct)}
-        for pct in percentages
+        {"pct": pct, "price": _round2(new_pc_price * (1 - pct))}
+        for pct in discount_percentages
     ]
 
 
-def estimate_buy_grid(pv_price, tiers, min_margin):
-    # The buy price should never leave less than min_margin euros of gap to
-    # the resale target (pv_price) -- each percentage-based tier is capped
-    # at pv_price - min_margin, so a cheap PV never produces a "still worth
-    # buying" tier that would leave too little margin to bother reselling.
-    ceiling = max(pv_price - min_margin, 0)
+def estimate_buy_grid(pv_price, tiers, min_margin_pct):
+    # The buy price should never leave less than min_margin_pct of pv_price
+    # as margin (this covers VAT owed on that margin under the used-goods
+    # VAT-on-margin scheme) -- each percentage-based tier is capped at
+    # pv_price * (1 - min_margin_pct), so a cheap PV never produces a
+    # "still worth buying" tier that would leave too little margin.
+    ceiling = max(pv_price * (1 - min_margin_pct), 0)
     grid = []
     for index, tier in enumerate(tiers):
         max_price = min(pv_price * tier["max_pct"], ceiling)

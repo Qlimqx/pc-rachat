@@ -75,7 +75,7 @@ def make_ebay_search_fn(client_id, client_secret):
 def format_pricing_grid(new_pc_price, sell_grid, buy_grid):
     lines = [f"Prix neuf équivalent estimé : {new_pc_price:.2f}€", "", "Prix de revente visé :"]
     for tier in sell_grid:
-        lines.append(f"  {tier['pct'] * 100:.0f}% du neuf : {tier['price']:.2f}€")
+        lines.append(f"  neuf -{tier['pct'] * 100:.0f}% : {tier['price']:.2f}€")
     lines.append("")
     lines.append("Grille d'achat :")
     for tier in buy_grid:
@@ -143,7 +143,7 @@ def main():
     if new_pc_result is not None:
         sell_grid = estimator.estimate_sell_grid(new_pc_result["value"], sell_tiers)
         buy_grid = estimator.estimate_buy_grid(
-            sell_grid[-1]["price"], buy_tiers, buy_margin["min_margin_eur"]
+            sell_grid[0]["price"], buy_tiers, buy_margin["min_margin_pct"]
         )
         print(format_pricing_grid(new_pc_result["value"], sell_grid, buy_grid))
     else:

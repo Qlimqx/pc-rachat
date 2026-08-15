@@ -117,7 +117,7 @@ def test_format_pricing_grid_renders_sell_and_buy_tiers():
     output = format_pricing_grid(1000.0, sell_grid, buy_grid)
 
     assert "Prix neuf équivalent estimé : 1000.00€" in output
-    assert "10% du neuf : 100.00€" in output
-    assert "30% du neuf : 300.00€" in output
+    assert "neuf -10% : 100.00€" in output
+    assert "neuf -30% : 300.00€" in output
     assert "jusqu'à 40.00€ 🔥 Très bonne affaire" in output
     assert "au-delà de 100.00€ ❌ Je passe" in output

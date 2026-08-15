@@ -231,7 +231,7 @@
       <div class="card">
         <ul class="result-list">
           {% for tier in sell_grid %}
-            <li>{{ "%.0f"|format(tier.pct * 100) }}% du neuf : {{ "%.2f"|format(tier.price) }}€</li>
+            <li>neuf -{{ "%.0f"|format(tier.pct * 100) }}% : {{ "%.2f"|format(tier.price) }}€</li>
           {% endfor %}
         </ul>
       </div>
