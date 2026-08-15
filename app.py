@@ -71,8 +71,8 @@ def index():
             new_pc_result = estimator.estimate_new_pc_price(cpu_model, gpu_model, new_pc_search_fns)
             if new_pc_result is not None:
                 new_pc_price = new_pc_result["value"]
-                buy_grid = estimator.estimate_buy_grid(new_pc_price, buy_tiers)
                 resale_target = estimator.estimate_resale_target(new_pc_price, resale_config)
+                buy_grid = estimator.estimate_buy_grid(resale_target["max"], buy_tiers)
 
     return render_template(
         "index.html",

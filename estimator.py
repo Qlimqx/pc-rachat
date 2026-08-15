@@ -167,11 +167,11 @@ def _round2(value):
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def estimate_buy_grid(new_pc_price, tiers):
+def estimate_buy_grid(base_price, tiers):
     grid = []
     for index, tier in enumerate(tiers):
         grid.append({
-            "max_price": _round2(new_pc_price * tier["max_pct"]),
+            "max_price": _round2(base_price * tier["max_pct"]),
             "emoji": tier["emoji"],
             "label": tier["label"],
             "is_last": index == len(tiers) - 1,

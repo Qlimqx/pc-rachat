@@ -140,8 +140,8 @@ def main():
     new_pc_result = estimator.estimate_new_pc_price(cpu_model, gpu_model, new_pc_search_fns)
     print()
     if new_pc_result is not None:
-        buy_grid = estimator.estimate_buy_grid(new_pc_result["value"], buy_tiers)
         resale_target = estimator.estimate_resale_target(new_pc_result["value"], resale_config)
+        buy_grid = estimator.estimate_buy_grid(resale_target["max"], buy_tiers)
         print(format_pricing_grid(new_pc_result["value"], buy_grid, resale_target))
     else:
         print("Grille d'achat non disponible — aucun PC neuf comparable trouvé.")

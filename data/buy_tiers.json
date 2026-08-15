@@ -1,8 +1,8 @@
 [
-  {"max_pct": 0.40, "emoji": "🔥", "label": "Très bonne affaire"},
-  {"max_pct": 0.44, "emoji": "✅", "label": "Intéressant"},
-  {"max_pct": 0.47, "emoji": "🟢", "label": "Correct"},
-  {"max_pct": 0.51, "emoji": "🟠", "label": "Il faut bien négocier"},
-  {"max_pct": 0.55, "emoji": "🔴", "label": "Marge faible"},
+  {"max_pct": 0.10, "emoji": "🔥", "label": "Très bonne affaire"},
+  {"max_pct": 0.20, "emoji": "✅", "label": "Intéressant"},
+  {"max_pct": 0.30, "emoji": "🟢", "label": "Correct"},
+  {"max_pct": 0.40, "emoji": "🟠", "label": "Il faut bien négocier"},
+  {"max_pct": 0.50, "emoji": "🔴", "label": "Marge faible"},
   {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"}
 ]
