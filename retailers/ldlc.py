@@ -83,3 +83,30 @@ def search_storage_prices(storage_go, storage_type):
     # verified live against ldlc.com. Case doesn't affect relevance either
     # (verified live), so storage_type is passed through as-is.
     return _search(f"Disque {storage_type} {storage_go}Go")
+
+
+def search_cpu_prices(cpu_model):
+    # Tried a bare model name first (e.g. "Ryzen 7 9800X3D"): alongside 3
+    # genuine standalone CPU listings, it also pulled in 2 whole prebuilt
+    # PCs ("LDLC PC11 BBBG" at 3949,95EUR, "LDLC PC BBBG" at 3699,95EUR) that
+    # merely include this CPU -- verified live against ldlc.com, and those
+    # two outliers would badly skew a median computed over only 5 results.
+    # Prefixing with "Processeur" (e.g. "Processeur Ryzen 7 9800X3D") drops
+    # both prebuilt PCs and returns only the 3 genuine standalone CPU
+    # listings -- verified live against ldlc.com.
+    return _search(f"Processeur {cpu_model}")
+
+
+def search_gpu_prices(gpu_model):
+    # Tried a bare model name first (e.g. "RTX 5070 Ti"): alongside genuine
+    # standalone GPU listings, ~43% of results were laptops that merely
+    # include this GPU (e.g. "ASUS ROG Zephyrus G14 GA403WR-DR4W", "MSI
+    # Vector 16 HX AI A2XWHG-472FR") -- verified live against ldlc.com.
+    # Prefixing with "Carte graphique" (e.g. "Carte graphique RTX 5070 Ti")
+    # drops all laptops; the remaining noise is ~22% (6/27) near-miss
+    # non-Ti "RTX 5070" cards that also match, since LDLC's search doesn't
+    # do exact phrase matching on "Ti" -- verified live. That's below the
+    # threshold where it would matter: the median over the 27 results
+    # (1329,95EUR) lands squarely among the genuine RTX 5070 Ti prices,
+    # unaffected by the lower-priced non-Ti outliers.
+    return _search(f"Carte graphique {gpu_model}")
