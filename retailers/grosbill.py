@@ -204,10 +204,11 @@ def search_gpu_prices(gpu_model):
     # bundle -- 35% noise). Prefixing with "Carte graphique" (same
     # category-anchor idea as search_cpu_prices' "Processeur" prefix)
     # drops every prebuilt/laptop entirely: 15 results left (verified
-    # live), 13 genuine standalone cards plus 1 more genuine card whose
-    # title omits the space before "Ti" ("RTX 5070Ti 16GB Overclocked
-    # Triple Fan V1" -- caught by _title_matches_model's whitespace-
-    # tolerant match), and 1 dangerous near-miss: a "Kit Upgrade PC" bundle
+    # live), 12 genuine standalone cards plus 2 more genuine cards whose
+    # titles omit the space before "Ti" ("ROG Strix GeForce RTX 5070Ti
+    # 16GB GDDR7 OC Edition" and "RTX 5070Ti 16GB Overclocked Triple Fan
+    # V1" -- both caught by _title_matches_model's whitespace-tolerant
+    # match), and 1 dangerous near-miss: a "Kit Upgrade PC" bundle
     # titled "RTX 5070Ti WF OC SFF 16Go + RM850e 850W Gold 3.1" (a GPU+PSU
     # kit at 1199,00EUR) whose title contains the full GPU model as a
     # verbatim substring -- a genuine substring/superset case (different
