@@ -174,7 +174,7 @@ def test_search_storage_prices_query_contains_size_and_type(mock_get):
 from retailers.pccomponentes import search_cpu_prices, search_gpu_prices
 
 
-EXPECTED_CPU_PRICES = [446.18, 435.0, 485.85]
+EXPECTED_CPU_PRICES = [446.18, 435.0]
 
 EXPECTED_GPU_PRICES = [
     1159.99, 1193.02, 1618.27, 1269.99, 1299.99, 1299.99, 1688.46, 1399.99,
@@ -202,6 +202,28 @@ def test_search_cpu_prices_extracts_prices_from_real_fixture(mock_get):
     assert prices == EXPECTED_CPU_PRICES
 
 
+@patch("retailers.pccomponentes.requests.get")
+def test_search_cpu_prices_excludes_wrong_sku_near_miss(mock_get):
+    # The fixture's 3rd "Processeur ... Ryzen 7 9800X3D" search result is
+    # actually a different CPU SKU -- "Ryzen 7 9850X3D" at 485.85EUR -- that
+    # PcComponentes' search doesn't distinguish from the requested model.
+    # The title_filter (matching against data-product-name) must exclude
+    # it, since at a plausible low result count a wrong-SKU price wouldn't
+    # be diluted by a median at all -- it would BE the reported price.
+    with open("tests/fixtures/pccomponentes_cpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert 485.85 not in prices
+    assert len(prices) == 2
+
+
 @patch("retailers.pccomponentes.requests.get", side_effect=Exception("network error"))
 def test_search_cpu_prices_returns_empty_list_on_network_failure(mock_get):
     assert search_cpu_prices("Ryzen 7 9800X3D") == []
@@ -215,9 +237,10 @@ def test_search_cpu_prices_query_contains_anchor_and_model(mock_get):
     # 2/33 were genuine standalone CPU listings (31 were prebuilt PCs that
     # merely include this CPU). Prefixing with "Processeur" drops all 31
     # prebuilt PCs, leaving only 3 results (2 genuine + 1 near-miss for the
-    # different "9850X3D" SKU) -- a median-invariance check confirmed that
-    # near-miss barely moves the median (446.18 with it vs 440.59 without,
-    # a 1.3% difference), so the anchored query is used as-is.
+    # different "9850X3D" SKU) -- that near-miss is now excluded directly by
+    # the title_filter matching against data-product-name, so the anchored
+    # query is used as-is and the wrong-SKU listing is filtered rather than
+    # diluted.
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.text = "<html><body>not a product listing page</body></html>"
