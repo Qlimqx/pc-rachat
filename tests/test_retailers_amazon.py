@@ -1,6 +1,12 @@
 from unittest.mock import patch, Mock
 
-from retailers.amazon import search_prices, search_ram_prices, search_storage_prices
+from retailers.amazon import (
+    search_prices,
+    search_ram_prices,
+    search_storage_prices,
+    search_cpu_prices,
+    search_gpu_prices,
+)
 
 
 @patch("retailers.amazon.requests.get")
@@ -237,3 +243,144 @@ def test_search_storage_prices_extracts_prices_without_title_filtering(mock_get)
     prices = search_storage_prices(512, "SSD")
 
     assert prices == [39.99, 49.0]
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_cpu_prices_handles_the_real_fixture_without_crashing(mock_get):
+    # tests/fixtures/amazon_cpu_search.html is the actual, unmodified
+    # response body a live `requests.get()` (same headers this module
+    # sends) got back from https://www.amazon.fr/s?k=Ryzen+7+9800X3D : HTTP
+    # 200 with an Akamai Bot Manager "bm-verify" interstitial page, the same
+    # mechanism documented for search_ram_prices/search_storage_prices
+    # above -- no product data, an accepted/expected outcome. Repeated live
+    # attempts for this same query also got the AWS WAF empty-body 202
+    # challenge on other tries (see the comment on search_cpu_prices in
+    # retailers/amazon.py); either way the outcome is the same empty list.
+    with open("tests/fixtures/amazon_cpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == []
+
+
+@patch("retailers.amazon.requests.get", side_effect=Exception("network error"))
+def test_search_cpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_cpu_prices("Ryzen 7 9800X3D") == []
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_cpu_prices_query_is_bare_model_name(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_cpu_prices("Ryzen 7 9800X3D")
+
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://www.amazon.fr/s"
+    assert kwargs["params"] == {"k": "Ryzen 7 9800X3D"}
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_cpu_prices_extracts_prices_without_title_filtering(mock_get):
+    # No live noise data came back (see fixture-based test above), so --
+    # mirroring search_ram_prices/search_storage_prices' default -- no
+    # title-relevance filter is applied to CPU results; every card with a
+    # parseable price counts, regardless of title content.
+    html = """
+    <html><body>
+    <div data-component-type="s-search-result">
+      <h2><span>AMD Ryzen 7 9800X3D Processeur</span></h2>
+      <div class="a-price"><span class="a-offscreen">479,00&#8364;</span></div>
+    </div>
+    <div data-component-type="s-search-result">
+      <h2><span>Totally unrelated title</span></h2>
+      <div class="a-price"><span class="a-offscreen">1&nbsp;399,90&#8364;</span></div>
+    </div>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert prices == [479.0, 1399.9]
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_gpu_prices_handles_the_real_fixture_without_crashing(mock_get):
+    # tests/fixtures/amazon_gpu_search.html is the actual, unmodified
+    # response body a live `requests.get()` got back from
+    # https://www.amazon.fr/s?k=RTX+5070+Ti : same Akamai "bm-verify"
+    # interstitial as the CPU fixture above (and, on other attempts, the
+    # same AWS WAF empty-body 202 challenge) -- no product data either way.
+    with open("tests/fixtures/amazon_gpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == []
+
+
+@patch("retailers.amazon.requests.get", side_effect=Exception("network error"))
+def test_search_gpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_gpu_prices("RTX 5070 Ti") == []
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_gpu_prices_query_is_bare_model_name(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_gpu_prices("RTX 5070 Ti")
+
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://www.amazon.fr/s"
+    assert kwargs["params"] == {"k": "RTX 5070 Ti"}
+
+
+@patch("retailers.amazon.requests.get")
+def test_search_gpu_prices_extracts_prices_without_title_filtering(mock_get):
+    # No live noise data came back (see fixture-based test above), so --
+    # mirroring search_ram_prices/search_storage_prices' default -- no
+    # title-relevance filter is applied to GPU results.
+    html = """
+    <html><body>
+    <div data-component-type="s-search-result">
+      <h2><span>NVIDIA GeForce RTX 5070 Ti 16GB</span></h2>
+      <div class="a-price"><span class="a-offscreen">899,00&#8364;</span></div>
+    </div>
+    <div data-component-type="s-search-result">
+      <h2><span>Totally unrelated title</span></h2>
+      <div class="a-price"><span class="a-offscreen">49,00&#8364;</span></div>
+    </div>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert prices == [899.0, 49.0]

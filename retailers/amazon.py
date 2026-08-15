@@ -210,3 +210,67 @@ def search_storage_prices(storage_go, storage_type):
         return prices
     except Exception:
         return []
+
+
+def search_cpu_prices(cpu_model):
+    try:
+        # Live-researched (2026-08-15) against https://www.amazon.fr/s for
+        # "Ryzen 7 9800X3D": repeatedly blocked, same as every other search
+        # in this module. Across ~10 attempts spread over a couple of
+        # minutes, this specific query flip-flopped between BOTH
+        # bot-mitigation responses already documented elsewhere in this
+        # file -- the AWS WAF challenge (HTTP 202, `x-amzn-waf-action:
+        # challenge`, this time with an empty body rather than the
+        # JS-challenge page seen in search_prices' fixture) and the Akamai
+        # Bot Manager "bm-verify" interstitial (HTTP 200, documented in
+        # search_ram_prices above) -- on the very same query, no code
+        # changes in between. That confirms (again) this is IP
+        # reputation/rate-based bot mitigation, not something tied to the
+        # query content. The non-empty Akamai response is what's saved as
+        # tests/fixtures/amazon_cpu_search.html since it's the more
+        # informative of the two to exercise in a fixture-based test; both
+        # variants parse to zero `s-search-result` cards either way.
+        #
+        # Since no request ever got past the challenge, there's no live
+        # product data to inspect for noise (near-miss variants, or a
+        # sibling-DOM "used"/"reconditioned"/"Amazon Renewed" marker like
+        # the one rueducommerce.py's search_cpu_prices found sitting next
+        # to -- not inside -- the title). No query anchor word and no
+        # title-relevance filter are applied here, mirroring this module's
+        # own search_ram_prices/search_storage_prices default for a
+        # source with zero live noise data to justify either.
+        soup = _fetch_soup(f"{cpu_model}")
+
+        prices = []
+        for card in soup.select('div[data-component-type="s-search-result"]'):
+            price = _extract_card_price(card)
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
+
+
+def search_gpu_prices(gpu_model):
+    try:
+        # Live-researched (2026-08-15) against https://www.amazon.fr/s for
+        # "RTX 5070 Ti": same outcome as search_cpu_prices above -- blocked
+        # on every attempt, alternating between the same two bot-mitigation
+        # responses (AWS WAF empty-body 202 challenge and Akamai "bm-verify"
+        # 200 interstitial). The non-empty Akamai response is saved as
+        # tests/fixtures/amazon_gpu_search.html. Same reasoning as
+        # search_cpu_prices: no live product data means no noise to filter
+        # against (including no way to check for a sibling-DOM used/
+        # reconditioned marker), so no query anchor and no title-relevance
+        # filter are applied, mirroring search_ram_prices/
+        # search_storage_prices' default.
+        soup = _fetch_soup(f"{gpu_model}")
+
+        prices = []
+        for card in soup.select('div[data-component-type="s-search-result"]'):
+            price = _extract_card_price(card)
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
