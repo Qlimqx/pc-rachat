@@ -177,19 +177,26 @@ def estimate_sell_grid(new_pc_price, discount_percentages):
 
 
 def estimate_buy_grid(pv_price, tiers, min_margin_pct):
-    # The buy price should never leave less than min_margin_pct of pv_price
-    # as margin (this covers VAT owed on that margin under the used-goods
-    # VAT-on-margin scheme) -- each percentage-based tier is capped at
-    # pv_price * (1 - min_margin_pct), so a cheap PV never produces a
-    # "still worth buying" tier that would leave too little margin.
+    # Each tier (except the last) is "PV minus X%" -- tier["max_pct"] is a
+    # discount to subtract from pv_price, e.g. max_pct=0.50 means "pay at
+    # most PV - 50%". Tiers must be listed biggest-discount-first (🔥, the
+    # cheapest/best deal) down to smallest-discount-last, so the computed
+    # prices come out ascending. The final tier ignores its own max_pct and
+    # is instead pinned to pv_price * (1 - min_margin_pct) -- the point
+    # where margin drops to the VAT-driven minimum (VAT owed on margin
+    # under the used-goods VAT-on-margin scheme) -- so that reject
+    # threshold has a single source of truth instead of being duplicated
+    # in data/buy_tiers.json.
     ceiling = max(pv_price * (1 - min_margin_pct), 0)
+    last_index = len(tiers) - 1
     grid = []
     for index, tier in enumerate(tiers):
-        max_price = min(pv_price * tier["max_pct"], ceiling)
+        is_last = index == last_index
+        max_price = ceiling if is_last else pv_price * (1 - tier["max_pct"])
         grid.append({
             "max_price": _round2(max_price),
             "emoji": tier["emoji"],
             "label": tier["label"],
-            "is_last": index == len(tiers) - 1,
+            "is_last": is_last,
         })
     return grid

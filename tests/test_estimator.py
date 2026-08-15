@@ -467,40 +467,38 @@ def test_estimate_sell_grid_rounds_to_two_decimals():
 from estimator import estimate_buy_grid
 
 
-def test_estimate_buy_grid_computes_price_per_tier():
+def test_estimate_buy_grid_computes_price_as_pv_minus_discount():
     tiers = [
-        {"max_pct": 0.40, "emoji": "🔥", "label": "Très bonne affaire"},
-        {"max_pct": 0.44, "emoji": "✅", "label": "Intéressant"},
-        {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"},
+        {"max_pct": 0.50, "emoji": "🔥", "label": "Très bonne affaire"},
+        {"max_pct": 0.40, "emoji": "✅", "label": "Intéressant"},
+        {"max_pct": 0.20, "emoji": "❌", "label": "Je passe"},
     ]
 
     result = estimate_buy_grid(1000.0, tiers, 0.20)
 
     assert result == [
-        {"max_price": 400.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
-        {"max_price": 440.0, "emoji": "✅", "label": "Intéressant", "is_last": False},
+        {"max_price": 500.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
+        {"max_price": 600.0, "emoji": "✅", "label": "Intéressant", "is_last": False},
         {"max_price": 800.0, "emoji": "❌", "label": "Je passe", "is_last": True},
     ]
 
 
-def test_estimate_buy_grid_caps_tiers_at_margin_floor():
+def test_estimate_buy_grid_last_tier_uses_margin_floor_not_its_own_pct():
     tiers = [
         {"max_pct": 0.10, "emoji": "🔥", "label": "Très bonne affaire"},
-        {"max_pct": 0.50, "emoji": "🔴", "label": "Marge faible"},
-        {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"},
+        {"max_pct": 0.99, "emoji": "❌", "label": "Je passe"},
     ]
 
     result = estimate_buy_grid(300.0, tiers, 0.70)
 
     assert result == [
-        {"max_price": 30.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
-        {"max_price": 90.0, "emoji": "🔴", "label": "Marge faible", "is_last": False},
+        {"max_price": 270.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
         {"max_price": 90.0, "emoji": "❌", "label": "Je passe", "is_last": True},
     ]
 
 
 def test_estimate_buy_grid_floors_ceiling_at_zero():
-    tiers = [{"max_pct": 1.00, "emoji": "❌", "label": "Je passe"}]
+    tiers = [{"max_pct": 0.50, "emoji": "❌", "label": "Je passe"}]
 
     result = estimate_buy_grid(100.0, tiers, 1.20)
 
@@ -508,10 +506,17 @@ def test_estimate_buy_grid_floors_ceiling_at_zero():
 
 
 def test_estimate_buy_grid_rounds_to_two_decimals():
-    tiers = [{"max_pct": 0.415, "emoji": "🔥", "label": "Très bonne affaire"}]
+    tiers = [
+        {"max_pct": 0.415, "emoji": "🔥", "label": "Très bonne affaire"},
+        {"max_pct": 0.50, "emoji": "❌", "label": "Je passe"},
+    ]
 
     result = estimate_buy_grid(999.0, tiers, 0)
 
-    assert result == [
-        {"max_price": 414.59, "emoji": "🔥", "label": "Très bonne affaire", "is_last": True}
-    ]
+    assert result[0] == {
+        "max_price": 584.42,
+        "emoji": "🔥",
+        "label": "Très bonne affaire",
+        "is_last": False,
+    }
+    assert result[1] == {"max_price": 999.0, "emoji": "❌", "label": "Je passe", "is_last": True}
