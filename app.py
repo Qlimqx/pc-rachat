@@ -49,6 +49,8 @@ def index():
             new_pc_search_fns = sourcing.make_new_pc_search_fn(client_id, client_secret)
             ram_search_fns = sourcing.make_ram_search_fn(client_id, client_secret)
             storage_search_fns = sourcing.make_storage_search_fn(client_id, client_secret)
+            cpu_search_fns = sourcing.make_cpu_search_fn()
+            gpu_search_fns = sourcing.make_gpu_search_fn()
 
             result = estimator.estimate_pc(
                 cpu_model=cpu_model,
@@ -62,6 +64,8 @@ def index():
                 component_rates=component_rates,
                 ram_search_fns=ram_search_fns,
                 storage_search_fns=storage_search_fns,
+                cpu_search_fns=cpu_search_fns,
+                gpu_search_fns=gpu_search_fns,
             )
 
             new_pc_result = estimator.estimate_new_pc_price(cpu_model, gpu_model, new_pc_search_fns)
