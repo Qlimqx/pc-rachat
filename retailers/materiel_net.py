@@ -32,18 +32,8 @@ def _price_text(price_el):
     return f"{euro_digits},{cents}"
 
 
-def search_prices(cpu_model, gpu_model):
+def _search(query):
     try:
-        # Verified live: Materiel.net's search does strict AND-matching, just
-        # like LDLC (both are part of the LDLC Group and share the same
-        # search platform). Combining the CPU and GPU model returns almost
-        # nothing ("Ryzen 7 5700X RTX 4060" -> 3 unrelated products: an
-        # adapter cable and a motherboard). Searching by GPU model alone is
-        # too narrow too (only 2 exact-match products). "PC gamer {gpu}"
-        # returns a full page of complete gaming-PC listings (208 results),
-        # mirroring the query shape already validated for LDLC, so we reuse
-        # it here and never leak the CPU model into the query.
-        query = f"PC gamer {gpu_model}"
         url = SEARCH_URL.format(query=requests.utils.quote(query))
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
@@ -68,3 +58,52 @@ def search_prices(cpu_model, gpu_model):
         return prices
     except Exception:
         return []
+
+
+def search_prices(cpu_model, gpu_model):
+    # Verified live: Materiel.net's search does strict AND-matching, just
+    # like LDLC (both are part of the LDLC Group and share the same
+    # search platform). Combining the CPU and GPU model returns almost
+    # nothing ("Ryzen 7 5700X RTX 4060" -> 3 unrelated products: an
+    # adapter cable and a motherboard). Searching by GPU model alone is
+    # too narrow too (only 2 exact-match products). "PC gamer {gpu}"
+    # returns a full page of complete gaming-PC listings (208 results),
+    # mirroring the query shape already validated for LDLC, so we reuse
+    # it here and never leak the CPU model into the query.
+    return _search(f"PC gamer {gpu_model}")
+
+
+def search_ram_prices(ram_go, ram_type):
+    # Tried "RAM {go}Go {type}" (LDLC's exact pattern, no space before "Go")
+    # first: on materiel.net this auto-redirects straight to a single
+    # unrelated product page (a CPU+motherboard+RAM "upgrade kit" whose
+    # title happens to contain "RAM 16Go DDR4" verbatim) instead of
+    # returning a search results page at all -- verified live, and the same
+    # dead end was hit with "16Go DDR4", "DDR4 16Go" and "Barrette RAM 16Go
+    # DDR4". Inserting a space before "Go" (e.g. "RAM 16 Go DDR4") avoids
+    # that single-exact-match redirect and returns a full results page: 48
+    # products, every one a genuine RAM module across a spread of
+    # capacities/speeds -- verified live against materiel.net, zero
+    # category pollution. Case doesn't affect relevance either (verified
+    # live -- "RAM 16 Go ddr4" and "RAM 16 Go DDR4" return byte-identical
+    # result sets), so ram_type is passed through as-is.
+    return _search(f"RAM {ram_go} Go {ram_type}")
+
+
+def search_storage_prices(storage_go, storage_type):
+    # Tried "Disque {type} {go}Go" (LDLC's exact pattern) and "Disque {type}
+    # {go} Go" first: both return results pages, but on materiel.net SSD
+    # storage is so common across whole computers (iMacs, MacBooks, laptops)
+    # that any query combining "SSD"/"Disque" with "{go} Go" gets swamped --
+    # verified live, e.g. "Disque SSD 512 Go" returned 35 results of which
+    # only 5 were standalone drives, the rest Apple iMacs/MacBooks that
+    # merely ship with a 512 Go SSD (~85% noise, far past the ~30% level
+    # that justifies filtering). Adding qualifiers like "interne", "NVMe",
+    # "M.2" or "SATA" made no difference -- byte-identical polluted result
+    # sets, verified live. Dropping the "Go" suffix entirely (e.g. "Disque
+    # SSD 512", bare number) fixes it: verified live, this returns a small
+    # but perfectly clean set of standalone SSD listings only (6/6 genuine
+    # drives for the 512 case), because it stops matching the "X Go" phrase
+    # that whole-computer spec sheets also contain. Case doesn't affect
+    # relevance (verified live), so storage_type is passed through as-is.
+    return _search(f"Disque {storage_type} {storage_go}")
