@@ -21,3 +21,11 @@ def make_storage_search_fn(client_id, client_secret):
         return ebay_client.search_storage_prices(storage_go, storage_type, client_id, client_secret)
 
     return [ebay_storage_search] + retailers.ALL_STORAGE_SEARCH_FUNCTIONS
+
+
+def make_cpu_search_fn():
+    return retailers.ALL_CPU_SEARCH_FUNCTIONS
+
+
+def make_gpu_search_fn():
+    return retailers.ALL_GPU_SEARCH_FUNCTIONS

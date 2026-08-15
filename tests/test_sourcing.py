@@ -1,6 +1,12 @@
 from unittest.mock import patch
 
-from sourcing import make_new_pc_search_fn, make_ram_search_fn, make_storage_search_fn
+from sourcing import (
+    make_new_pc_search_fn,
+    make_ram_search_fn,
+    make_storage_search_fn,
+    make_cpu_search_fn,
+    make_gpu_search_fn,
+)
 
 
 def test_make_new_pc_search_fn_returns_eight_functions():
@@ -52,3 +58,15 @@ def test_storage_first_function_wraps_ebay_with_credentials(mock_search):
 
     assert result == [45.0]
     mock_search.assert_called_once_with(512, "ssd", "myid", "mysecret")
+
+
+def test_make_cpu_search_fn_returns_seven_functions():
+    fns = make_cpu_search_fn()
+    assert len(fns) == 7
+    assert all(callable(fn) for fn in fns)
+
+
+def test_make_gpu_search_fn_returns_seven_functions():
+    fns = make_gpu_search_fn()
+    assert len(fns) == 7
+    assert all(callable(fn) for fn in fns)
