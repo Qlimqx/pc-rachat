@@ -32,7 +32,81 @@ def _price_text(price_el):
     return f"{euro_digits},{cents}"
 
 
-def _search(query):
+# Suffix qualifiers that, when they immediately follow a matched model number,
+# mark a different, typically pricier variant rather than the base model --
+# e.g. a "RTX 5070 Ti Super" listing must not match a "RTX 5070 Ti" query.
+# Same list as pccomponentes.py/rueducommerce.py/amazon.py's
+# _title_matches_model. Not exercised by either captured fixture (the GPU
+# near-miss found live was the opposite direction -- plain "RTX 5070" cards
+# missing "Ti", already rejected because the substring itself isn't found --
+# see _title_matches_model docstring), but kept for the same reason
+# pccomponentes.py keeps it: cheap insurance against a future query/page
+# where a real superset variant does show up.
+_SUFFIX_QUALIFIERS = ("ti", "super", "xt", "xtx", "x3d")
+
+
+def _title_matches_model(title, model):
+    """Check whether a product's title refers to `model`.
+
+    Materiel.net's card markup exposes a clean, structured title via
+    <h2 class="c-product__title"> right alongside the price -- same shape as
+    PcComponentes' data-product-name, so this mirrors
+    pccomponentes.py's _title_matches_model rather than
+    rueducommerce.py/amazon.py's whitespace-tolerant regex version (verified
+    against both fixtures: model names appear as exact, consistently-spaced
+    substrings, no "RTX5070Ti" vs "RTX 5070 Ti" spacing collapse).
+
+    Two kinds of noise were found live, verified against the CPU and GPU
+    fixtures, that a plain substring match alone would NOT reject:
+
+    1. Bundle/kit listings. The CPU query for "Ryzen 7 9800X3D" returned a
+       "MSI MAG B850 TOMAHAWK MAX WIFI + AMD Ryzen 7 9800X3D (Version tray)"
+       kit at 739,90EUR (a motherboard+CPU bundle, category "Kit upgrade PC")
+       whose title contains the full requested CPU model as a verbatim,
+       unextended substring -- so this is a genuine substring/superset
+       relationship (a different *product*, not just a different model),
+       not caught by the suffix-qualifier check below. Materiel.net's own
+       kit-naming convention always joins components with " + ", which no
+       standalone CPU/GPU listing in either fixture contains, so titles
+       with " + " are rejected outright.
+    2. Used listings. Both the CPU and GPU queries returned genuine
+       same-model listings suffixed "- Occasion" (e.g. "AMD Ryzen 7 9800X3D
+       (4.7 GHz) - Version tray - Occasion" at 431,95EUR; 4 of the GPU
+       query's 21 genuine RTX 5070 Ti results were "- Occasion"). This
+       function backs search_cpu_prices/search_gpu_prices specifically,
+       which exist to source *new* market prices ahead of the eBay occasion
+       fallback (see estimator.py) -- letting used listings leak in here
+       would undermine that new/occasion split, so titles containing the
+       word "occasion" are rejected too.
+
+    On top of those two, the same suffix-boundary logic as
+    pccomponentes.py's _title_matches_model still applies: a match is
+    rejected if the character right after it is alphanumeric with no
+    separating space (a concatenated "RTX5070TiSuper"), or if the first word
+    after it, once whitespace is skipped, is one of _SUFFIX_QUALIFIERS (e.g.
+    "Ti", "Super"). Anything else after a space is unrelated trailing product
+    text and still counts as a match.
+    """
+    title_norm = title.lower()
+    if " + " in title_norm:
+        return False
+    if "occasion" in title_norm:
+        return False
+    model_norm = model.lower().strip()
+    start = title_norm.find(model_norm)
+    if start == -1:
+        return False
+    end = start + len(model_norm)
+    tail = title_norm[end:]
+    if tail and tail[0].isalnum():
+        return False
+    next_word = re.match(r"\s+([a-z0-9]+)", tail)
+    if next_word and next_word.group(1) in _SUFFIX_QUALIFIERS:
+        return False
+    return True
+
+
+def _search(query, title_filter=None):
     try:
         url = SEARCH_URL.format(query=requests.utils.quote(query))
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -41,6 +115,10 @@ def _search(query):
 
         prices = []
         for card in soup.select("li.c-products-list__item"):
+            if title_filter is not None:
+                title_el = card.select_one(".c-product__title")
+                if title_el is None or not title_filter(title_el.get_text(strip=True)):
+                    continue
             # No structured price attribute or JSON-LD block exists on this
             # page (verified live via DOM inspection), so we fall back to
             # parsing the display text. Promo items render two price spans
@@ -107,3 +185,58 @@ def search_storage_prices(storage_go, storage_type):
     # that whole-computer spec sheets also contain. Case doesn't affect
     # relevance (verified live), so storage_type is passed through as-is.
     return _search(f"Disque {storage_type} {storage_go}")
+
+
+def search_cpu_prices(cpu_model):
+    # Do NOT copy LDLC's Task 4 query blindly despite the shared LDLC-Group
+    # platform -- verified live, independently, against materiel.net.
+    # Tried a bare model name first (e.g. "Ryzen 7 9800X3D"): 22 results,
+    # almost entirely "PC Gamer <name>" prebuilt listings that merely
+    # include this CPU (17/22), plus one motherboard+RAM kit bundle whose
+    # title doesn't even contain the word "processeur" -- only 2 genuine
+    # standalone CPU listings. Prefixing with "Processeur" (e.g. "Processeur
+    # Ryzen 7 9800X3D", same shape as LDLC's query) drops every prebuilt PC:
+    # 5 results left (verified live) -- 3 genuine standalone CPU listings
+    # (2 new + 1 used), 1 unrelated motherboard (title doesn't mention the
+    # CPU model at all, so a plain substring check already excludes it), and
+    # 1 "MSI MAG B850 TOMAHAWK MAX WIFI + AMD Ryzen 7 9800X3D (Version tray)"
+    # motherboard+CPU kit whose title DOES contain the full CPU model as a
+    # verbatim substring (739,90EUR, well above the standalone CPU prices) --
+    # a genuine substring/superset case a plain substring check would miss.
+    # _title_matches_model rejects that kit via its " + " bundle check, and
+    # separately rejects the one used ("- Occasion") listing so this
+    # new-price search doesn't leak a used price into the "market neuf" step
+    # ahead of the eBay occasion fallback (see estimator.py). Net: 2 genuine
+    # new standalone CPU listings, 0% noise against the fixture.
+    return _search(
+        f"Processeur {cpu_model}",
+        title_filter=lambda title: _title_matches_model(title, cpu_model),
+    )
+
+
+def search_gpu_prices(gpu_model):
+    # Do NOT copy LDLC's Task 4 query blindly despite the shared LDLC-Group
+    # platform -- verified live, independently, against materiel.net.
+    # Tried a bare model name first (e.g. "RTX 5070 Ti"): 50 results, heavily
+    # polluted by "PC Gamer <name>" prebuilts and gaming laptops that merely
+    # include this GPU. Prefixing with "Carte graphique" (e.g. "Carte
+    # graphique RTX 5070 Ti", same shape as LDLC's query) drops every
+    # prebuilt/laptop: 27 results left (verified live), of which 21 are
+    # genuine RTX 5070 Ti cards (confirmed via the page's own "Chipset
+    # graphique" facet counts: "NVIDIA GeForce RTX 5070 Ti (21)") and 6 are
+    # plain non-Ti "RTX 5070" cards -- Materiel.net's search doesn't do exact
+    # phrase matching on "Ti", the same behavior already seen on LDLC.
+    # Unlike LDLC's GPU search, that near-miss doesn't need special handling:
+    # "RTX 5070 Ti" is not a substring of "RTX 5070", so a plain substring
+    # check on the title already rejects all 6 (verified against the
+    # fixture). Of the 21 genuine RTX 5070 Ti results, 4 are used ("-
+    # Occasion") listings -- _title_matches_model rejects those too, for the
+    # same "market neuf" reason as search_cpu_prices. Net: 17 genuine new
+    # RTX 5070 Ti listings, 0% noise against the fixture. The suffix-boundary
+    # check in _title_matches_model (rejecting a "Ti Super"-style superset)
+    # isn't exercised by this fixture -- no such variant was returned live --
+    # but is kept as the same cheap insurance pccomponentes.py keeps it for.
+    return _search(
+        f"Carte graphique {gpu_model}",
+        title_filter=lambda title: _title_matches_model(title, gpu_model),
+    )

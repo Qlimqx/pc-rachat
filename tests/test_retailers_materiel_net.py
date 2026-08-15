@@ -1,7 +1,13 @@
 from unittest.mock import patch, Mock
 from urllib.parse import unquote
 
-from retailers.materiel_net import search_prices, search_ram_prices, search_storage_prices
+from retailers.materiel_net import (
+    search_prices,
+    search_ram_prices,
+    search_storage_prices,
+    search_cpu_prices,
+    search_gpu_prices,
+)
 
 
 EXPECTED_PRICES = [
@@ -181,3 +187,159 @@ def test_search_storage_prices_query_contains_size_and_type(mock_get):
     assert "512" in decoded_url
     assert "512Go" not in decoded_url
     assert "512 Go" not in decoded_url
+
+
+EXPECTED_CPU_PRICES = [479.95, 499.95]
+
+EXPECTED_GPU_PRICES = [
+    1199.95, 1339.95, 1279.95, 1599.95, 1529.95, 1499.95, 1399.95, 1329.95,
+    1329.95, 1399.95, 1329.95, 1349.95, 1429.95, 1279.95, 1429.95, 1399.95,
+    1329.95,
+]
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_cpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/materiel_net_cpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == EXPECTED_CPU_PRICES
+
+
+@patch("retailers.materiel_net.requests.get", side_effect=Exception("network error"))
+def test_search_cpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_cpu_prices("Ryzen 7 9800X3D") == []
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_cpu_prices_query_contains_anchor_and_model(mock_get):
+    # Locks in the constructed query so a future edit to the f-string in
+    # search_cpu_prices can't silently regress without a test catching it.
+    # A bare model name (verified live) pulls in mostly "PC Gamer <name>"
+    # prebuilt listings (17/22); prefixing with "Processeur" drops every one
+    # of them.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_cpu_prices("Ryzen 7 9800X3D")
+
+    requested_url = mock_get.call_args[0][0]
+    decoded_url = unquote(requested_url)
+
+    assert decoded_url.endswith("/recherche/Processeur Ryzen 7 9800X3D/")
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_cpu_prices_excludes_kit_and_used_listings(mock_get):
+    # Regression test for the two noise sources found live in the CPU
+    # fixture: a motherboard+CPU "Kit upgrade PC" bundle whose title
+    # contains the full requested model as a verbatim substring (a genuine
+    # substring/superset case a plain substring check would miss), and a
+    # used ("- Occasion") listing of the same genuine model, which must not
+    # leak into a search meant to source *new* prices.
+    html = """
+    <html><body>
+    <li class="c-products-list__item">
+        <h2 class="c-product__title">AMD Ryzen 7 9800X3D (4.7 GHz / 5.2 GHz)</h2>
+        <div class="o-product__price">499€<sup>95</sup></div>
+    </li>
+    <li class="c-products-list__item">
+        <h2 class="c-product__title">MSI MAG B850 TOMAHAWK MAX WIFI + AMD Ryzen 7 9800X3D (Version tray)</h2>
+        <div class="o-product__price">739€<sup>90</sup></div>
+    </li>
+    <li class="c-products-list__item">
+        <h2 class="c-product__title">AMD Ryzen 7 9800X3D (4.7 GHz) - Version tray - Occasion</h2>
+        <div class="o-product__price">431€<sup>95</sup></div>
+    </li>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    assert search_cpu_prices("Ryzen 7 9800X3D") == [499.95]
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_gpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/materiel_net_gpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == EXPECTED_GPU_PRICES
+
+
+@patch("retailers.materiel_net.requests.get", side_effect=Exception("network error"))
+def test_search_gpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_gpu_prices("RTX 5070 Ti") == []
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_gpu_prices_query_contains_anchor_and_model(mock_get):
+    # Locks in the constructed query so a future edit to the f-string in
+    # search_gpu_prices can't silently regress without a test catching it.
+    # A bare model name (verified live) pulls in mostly prebuilt PCs and
+    # gaming laptops (50 results); prefixing with "Carte graphique" drops
+    # them all (27 results left).
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_gpu_prices("RTX 5070 Ti")
+
+    requested_url = mock_get.call_args[0][0]
+    decoded_url = unquote(requested_url)
+
+    assert decoded_url.endswith("/recherche/Carte graphique RTX 5070 Ti/")
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_gpu_prices_excludes_non_ti_and_used_listings(mock_get):
+    # Regression test for the two noise sources found live in the GPU
+    # fixture: plain non-Ti "RTX 5070" cards (Materiel.net's search doesn't
+    # do exact phrase matching on "Ti") and used ("- Occasion") listings of
+    # the genuine Ti model, which must not leak into a search meant to
+    # source *new* prices.
+    html = """
+    <html><body>
+    <li class="c-products-list__item">
+        <h2 class="c-product__title">Gainward GeForce RTX 5070 Ti Phoenix-S</h2>
+        <div class="o-product__price">1 199€<sup>95</sup></div>
+    </li>
+    <li class="c-products-list__item">
+        <h2 class="c-product__title">Asus DUAL GeForce RTX 5070 12GB GDDR7 OC</h2>
+        <div class="o-product__price">839€<sup>95</sup></div>
+    </li>
+    <li class="c-products-list__item">
+        <h2 class="c-product__title">Gainward GeForce RTX 5070 Ti Phoenix-S - Occasion</h2>
+        <div class="o-product__price">1 079€<sup>95</sup></div>
+    </li>
+    </body></html>
+    """
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    assert search_gpu_prices("RTX 5070 Ti") == [1199.95]
