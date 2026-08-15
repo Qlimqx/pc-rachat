@@ -133,7 +133,7 @@ def test_estimate_component_uses_ebay_median_when_available():
     def fake_ebay_search(model, category):
         return [50.0, 55.0, 60.0]
 
-    result = estimate_component("i5-10400", "cpu", fake_ebay_search, REFERENCE)
+    result = estimate_component("i5-10400", "cpu", fake_ebay_search, REFERENCE, [])
     assert result == {"value": 55.0, "method": "médiane sur 3 annonces eBay"}
 
 
@@ -141,7 +141,7 @@ def test_estimate_component_falls_back_to_reference_table_when_ebay_empty():
     def fake_ebay_search(model, category):
         return []
 
-    result = estimate_component("i5-10400", "cpu", fake_ebay_search, REFERENCE)
+    result = estimate_component("i5-10400", "cpu", fake_ebay_search, REFERENCE, [])
     assert result == {"value": 55, "method": "table de référence"}
 
 
@@ -149,7 +149,7 @@ def test_estimate_component_reference_lookup_is_normalized():
     def fake_ebay_search(model, category):
         return []
 
-    result = estimate_component("  I5-10400  ", "cpu", fake_ebay_search, REFERENCE)
+    result = estimate_component("  I5-10400  ", "cpu", fake_ebay_search, REFERENCE, [])
     assert result == {"value": 55, "method": "table de référence"}
 
 
@@ -157,8 +157,60 @@ def test_estimate_component_returns_none_when_unknown_everywhere():
     def fake_ebay_search(model, category):
         return []
 
-    result = estimate_component("unknown-cpu-9999", "cpu", fake_ebay_search, REFERENCE)
+    result = estimate_component("unknown-cpu-9999", "cpu", fake_ebay_search, REFERENCE, [])
     assert result is None
+
+
+def test_estimate_component_uses_new_price_median_when_sources_find_prices():
+    def fake_ebay_search(model, category):
+        return [1094.28]
+
+    def new_price_source(model):
+        return [450.0, 480.0]
+
+    result = estimate_component(
+        "i5-10400", "cpu", fake_ebay_search, REFERENCE, [new_price_source]
+    )
+    assert result == {"value": 465.0, "method": "médiane sur 2 annonces neuves"}
+
+
+def test_estimate_component_new_price_takes_priority_over_ebay():
+    def fake_ebay_search(model, category):
+        raise AssertionError("eBay must not be called when a new price is found")
+
+    def new_price_source(model):
+        return [480.0]
+
+    result = estimate_component(
+        "i5-10400", "cpu", fake_ebay_search, REFERENCE, [new_price_source]
+    )
+    assert result == {"value": 480.0, "method": "médiane sur 1 annonces neuves"}
+
+
+def test_estimate_component_falls_back_to_ebay_when_no_new_price_found():
+    def fake_ebay_search(model, category):
+        return [55.0]
+
+    def empty_new_price_source(model):
+        return []
+
+    result = estimate_component(
+        "i5-10400", "cpu", fake_ebay_search, REFERENCE, [empty_new_price_source]
+    )
+    assert result == {"value": 55.0, "method": "médiane sur 1 annonces eBay"}
+
+
+def test_estimate_component_falls_back_to_reference_table_when_new_price_and_ebay_both_empty():
+    def fake_ebay_search(model, category):
+        return []
+
+    def empty_new_price_source(model):
+        return []
+
+    result = estimate_component(
+        "i5-10400", "cpu", fake_ebay_search, REFERENCE, [empty_new_price_source]
+    )
+    assert result == {"value": 55, "method": "table de référence"}
 
 
 from estimator import estimate_pc

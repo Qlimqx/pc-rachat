@@ -77,7 +77,14 @@ def normalize_model(name):
     return " ".join(name.lower().split())
 
 
-def estimate_component(model, category, ebay_search_fn, reference_table):
+def estimate_component(model, category, ebay_search_fn, reference_table, new_price_search_fns):
+    new_prices = _aggregate_market_prices(new_price_search_fns, model)
+    if new_prices:
+        return {
+            "value": median_price(new_prices),
+            "method": f"médiane sur {len(new_prices)} annonces neuves",
+        }
+
     prices = ebay_search_fn(model, category)
     if prices:
         value = median_price(prices)
