@@ -69,3 +69,34 @@ def search_storage_prices(storage_go, storage_type):
     # has. storage_type is passed through as-is; no case transform was
     # verified to change relevance.
     return _search(f"{storage_go}Go {storage_type}")
+
+
+def search_cpu_prices(cpu_model):
+    # Unlike RAM/storage, a bare model name does NOT carry over cleanly here
+    # -- verified live: bare "Ryzen 7 9800X3D" returned 33 results, but only
+    # 2 were genuine standalone CPU listings; the other 31 were prebuilt PCs
+    # that merely include this CPU (e.g. "PC de bureau PcCom Imperial AMD
+    # Ryzen 7 9800X3D ... RTX 5070 Ti" at 2660.38EUR). Prefixing with
+    # "Processeur" (e.g. "Processeur Ryzen 7 9800X3D") drops all 31 prebuilt
+    # PCs, leaving only 3 results: the 2 genuine listings (446.18EUR,
+    # 435EUR) plus 1 near-miss for the different "Ryzen 7 9850X3D" SKU
+    # (485.85EUR) that PcComponentes' search doesn't distinguish from the
+    # requested model -- verified live against pccomponentes.fr. That 1/3
+    # (~33%) noise sits above the ~10% threshold where it's obviously safe
+    # to ignore, so a median-invariance check was done: statistics.median of
+    # all 3 prices is 446.18, versus 440.59 with the near-miss excluded --
+    # only a 1.3% difference, so the median is effectively unaffected.
+    return _search(f"Processeur {cpu_model}")
+
+
+def search_gpu_prices(gpu_model):
+    # A bare model name does NOT carry over cleanly here either -- verified
+    # live: bare "RTX 5070 Ti" returned 40 results, but ~53% (21/40) were
+    # laptops and prebuilt desktops that merely include this GPU (e.g.
+    # "Ordinateur portable MSI Vector 16 HX AI ... RTX 5070 Ti"), far above
+    # the noise-tolerance threshold. Prefixing with "Carte graphique" (e.g.
+    # "Carte graphique RTX 5070 Ti") drops every laptop and desktop: all 33
+    # results are genuine standalone RTX 5070 Ti graphics cards (PNY, Zotac,
+    # MSI, Gigabyte, ASUS, Palit, Inno3D, etc.) -- verified live against
+    # pccomponentes.fr, 0% noise, no median-invariance check needed.
+    return _search(f"Carte graphique {gpu_model}")

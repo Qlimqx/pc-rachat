@@ -169,3 +169,107 @@ def test_search_storage_prices_query_contains_size_and_type(mock_get):
     assert "512Go" in decoded_url
     assert "ssd" in decoded_url
     assert decoded_url.startswith("https://www.pccomponentes.fr/search?query=")
+
+
+from retailers.pccomponentes import search_cpu_prices, search_gpu_prices
+
+
+EXPECTED_CPU_PRICES = [446.18, 435.0, 485.85]
+
+EXPECTED_GPU_PRICES = [
+    1159.99, 1193.02, 1618.27, 1269.99, 1299.99, 1299.99, 1688.46, 1399.99,
+    1369.99, 1259.99, 1338.83, 1349.99, 1169.99, 1189.99, 1311.83, 1299.99,
+    1299.99, 1199.99, 1279.99, 1470.92, 1600.22, 1479.99, 1399.99, 1311.05,
+    1604.46, 1397.75, 1526.15, 1343.9, 1834.99, 1696.12, 1678.99, 1578.56,
+    1380.42,
+]
+
+
+@patch("retailers.pccomponentes.requests.get")
+def test_search_cpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/pccomponentes_cpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == EXPECTED_CPU_PRICES
+
+
+@patch("retailers.pccomponentes.requests.get", side_effect=Exception("network error"))
+def test_search_cpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_cpu_prices("Ryzen 7 9800X3D") == []
+
+
+@patch("retailers.pccomponentes.requests.get")
+def test_search_cpu_prices_query_contains_anchor_and_model(mock_get):
+    # Locks in the constructed query so a future edit to the f-string in
+    # search_cpu_prices can't silently regress without a test catching it.
+    # Verified live: bare "Ryzen 7 9800X3D" returned 33 results but only
+    # 2/33 were genuine standalone CPU listings (31 were prebuilt PCs that
+    # merely include this CPU). Prefixing with "Processeur" drops all 31
+    # prebuilt PCs, leaving only 3 results (2 genuine + 1 near-miss for the
+    # different "9850X3D" SKU) -- a median-invariance check confirmed that
+    # near-miss barely moves the median (446.18 with it vs 440.59 without,
+    # a 1.3% difference), so the anchored query is used as-is.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_cpu_prices("Ryzen 7 9800X3D")
+
+    requested_url = mock_get.call_args[0][0]
+    decoded_url = unquote(requested_url)
+
+    assert decoded_url == "https://www.pccomponentes.fr/search?query=Processeur Ryzen 7 9800X3D"
+
+
+@patch("retailers.pccomponentes.requests.get")
+def test_search_gpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/pccomponentes_gpu_search.html", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = html
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == EXPECTED_GPU_PRICES
+
+
+@patch("retailers.pccomponentes.requests.get", side_effect=Exception("network error"))
+def test_search_gpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_gpu_prices("RTX 5070 Ti") == []
+
+
+@patch("retailers.pccomponentes.requests.get")
+def test_search_gpu_prices_query_contains_anchor_and_model(mock_get):
+    # Locks in the constructed query so a future edit to the f-string in
+    # search_gpu_prices can't silently regress without a test catching it.
+    # Verified live: bare "RTX 5070 Ti" returned 40 results but ~53%
+    # (21/40) were laptops/prebuilt desktops that merely include this GPU.
+    # Prefixing with "Carte graphique" drops every laptop and desktop --
+    # all 33 results are genuine standalone RTX 5070 Ti graphics cards, 0%
+    # noise.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>not a product listing page</body></html>"
+    mock_get.return_value = mock_response
+
+    search_gpu_prices("RTX 5070 Ti")
+
+    requested_url = mock_get.call_args[0][0]
+    decoded_url = unquote(requested_url)
+
+    assert decoded_url == "https://www.pccomponentes.fr/search?query=Carte graphique RTX 5070 Ti"
