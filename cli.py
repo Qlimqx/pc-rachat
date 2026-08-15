@@ -108,6 +108,8 @@ def main():
     resale_config = load_json(DATA_DIR / "resale_target.json")
     ebay_search_fn = make_ebay_search_fn(client_id, client_secret)
     new_pc_search_fns = sourcing.make_new_pc_search_fn(client_id, client_secret)
+    ram_search_fns = sourcing.make_ram_search_fn(client_id, client_secret)
+    storage_search_fns = sourcing.make_storage_search_fn(client_id, client_secret)
 
     print("=== Estimation de rachat PC ===\n")
     cpu_model = input("Modèle CPU (ex: i5-10400) : ").strip()
@@ -127,6 +129,8 @@ def main():
         ebay_search_fn=ebay_search_fn,
         reference_prices=reference_prices,
         component_rates=component_rates,
+        ram_search_fns=ram_search_fns,
+        storage_search_fns=storage_search_fns,
     )
 
     new_pc_result = estimator.estimate_new_pc_price(cpu_model, gpu_model, new_pc_search_fns)
