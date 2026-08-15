@@ -237,6 +237,8 @@ def test_estimate_pc_full_breakdown_and_total():
         component_rates=rates,
         ram_search_fns=[],
         storage_search_fns=[],
+        cpu_search_fns=[],
+        gpu_search_fns=[],
     )
 
     assert result["breakdown"]["cpu"]["value"] == 55.0
@@ -264,6 +266,8 @@ def test_estimate_pc_without_gpu():
         component_rates=rates,
         ram_search_fns=[],
         storage_search_fns=[],
+        cpu_search_fns=[],
+        gpu_search_fns=[],
     )
 
     assert result["breakdown"]["gpu"] is None
@@ -288,6 +292,8 @@ def test_estimate_pc_flags_missing_components():
         component_rates=rates,
         ram_search_fns=[],
         storage_search_fns=[],
+        cpu_search_fns=[],
+        gpu_search_fns=[],
     )
 
     assert result["missing"] == ["cpu", "gpu"]
@@ -318,6 +324,8 @@ def test_estimate_pc_uses_market_prices_for_ram_and_storage_when_available():
         component_rates=rates,
         ram_search_fns=[ram_source],
         storage_search_fns=[storage_source],
+        cpu_search_fns=[],
+        gpu_search_fns=[],
     )
 
     assert result["breakdown"]["ram"] == {
@@ -327,6 +335,43 @@ def test_estimate_pc_uses_market_prices_for_ram_and_storage_when_available():
     assert result["breakdown"]["storage"] == {
         "value": 47.5,
         "method": "médiane sur 2 annonces neuves",
+    }
+
+
+def test_estimate_pc_uses_new_price_for_cpu_and_gpu_when_available():
+    def fake_ebay_search(model, category):
+        return [1094.28]
+
+    def cpu_source(model):
+        return [450.0, 480.0]
+
+    def gpu_source(model):
+        return [900.0]
+
+    rates = {"ram": {"ddr5": 9.5}, "storage": {"nvme": 0.07}}
+    result = estimate_pc(
+        cpu_model="ryzen 7 9800x3d",
+        ram_go=32,
+        ram_type="ddr5",
+        storage_go=1000,
+        storage_type="nvme",
+        gpu_model="rtx 5070 ti",
+        ebay_search_fn=fake_ebay_search,
+        reference_prices={},
+        component_rates=rates,
+        ram_search_fns=[],
+        storage_search_fns=[],
+        cpu_search_fns=[cpu_source],
+        gpu_search_fns=[gpu_source],
+    )
+
+    assert result["breakdown"]["cpu"] == {
+        "value": 465.0,
+        "method": "médiane sur 2 annonces neuves",
+    }
+    assert result["breakdown"]["gpu"] == {
+        "value": 900.0,
+        "method": "médiane sur 1 annonces neuves",
     }
 
 

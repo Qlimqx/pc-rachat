@@ -111,11 +111,15 @@ def estimate_pc(
     component_rates,
     ram_search_fns,
     storage_search_fns,
+    cpu_search_fns,
+    gpu_search_fns,
 ):
     breakdown = {}
     missing = []
 
-    breakdown["cpu"] = estimate_component(cpu_model, "cpu", ebay_search_fn, reference_prices)
+    breakdown["cpu"] = estimate_component(
+        cpu_model, "cpu", ebay_search_fn, reference_prices, cpu_search_fns
+    )
     if breakdown["cpu"] is None:
         missing.append("cpu")
 
@@ -130,7 +134,9 @@ def estimate_pc(
         missing.append("storage")
 
     if gpu_model:
-        breakdown["gpu"] = estimate_component(gpu_model, "gpu", ebay_search_fn, reference_prices)
+        breakdown["gpu"] = estimate_component(
+            gpu_model, "gpu", ebay_search_fn, reference_prices, gpu_search_fns
+        )
         if breakdown["gpu"] is None:
             missing.append("gpu")
     else:
