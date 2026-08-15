@@ -117,7 +117,6 @@ def _extract_card_price(card):
     raw_price = (
         raw_price.replace("\xa0", "")
         .replace(" ", "")
-        .replace(" ", "")
         .replace("€", "")
         .replace(",", ".")
         .strip()
