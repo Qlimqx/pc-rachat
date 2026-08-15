@@ -1,3 +1,5 @@
+import re
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -8,20 +10,57 @@ HEADERS = {
 }
 
 
+# Same list as rueducommerce.py/amazon.py's _title_matches_model: suffix
+# qualifiers that, when they immediately follow a matched model number, mark
+# a different, typically pricier variant rather than the base model -- e.g.
+# a "RTX 5070 Ti Super" listing must not match a "RTX 5070 Ti" query, the
+# same way NVIDIA previously shipped a "RTX 4070 Ti Super" alongside the
+# plain "RTX 4070 Ti". Checked against the real CPU/GPU fixtures: none of
+# their data-product-name values contain a "Ti Super"-style near-miss, so
+# this doesn't change any fixture-based test outcome -- it's protection
+# against a variant PcComponentes' search doesn't currently return but
+# plausibly could.
+_SUFFIX_QUALIFIERS = ("ti", "super", "xt", "xtx", "x3d")
+
+
 def _title_matches_model(title, model):
     """Check whether a product's data-product-name refers to `model`.
 
-    Unlike rueducommerce.py/amazon.py's _title_matches_model (which handles
-    inconsistent whitespace and suffix-qualifier near-misses in rendered
-    HTML text), PcComponentes exposes a clean, structured data-product-name
-    attribute right alongside data-product-price. Verified against the CPU
-    and GPU fixtures: model names appear as exact, consistently-spaced
-    substrings (e.g. "Ryzen 7 9800X3D", "RTX 5070 Ti"), with no "RTX4060"
-    vs "RTX 4060" style spacing collapse. So a plain case-insensitive
-    substring check is sufficient here -- no whitespace-tolerant regex is
-    needed.
+    Unlike rueducommerce.py/amazon.py's _title_matches_model, PcComponentes
+    exposes a clean, structured data-product-name attribute right alongside
+    data-product-price. Verified against the CPU and GPU fixtures: model
+    names appear as exact, consistently-spaced substrings (e.g. "Ryzen 7
+    9800X3D", "RTX 5070 Ti"), with no "RTX4060" vs "RTX 4060" style spacing
+    collapse -- so, unlike those two files, this doesn't need a
+    whitespace-tolerant regex to line up the match itself; a plain
+    case-insensitive substring find is enough for that part.
+
+    But finding the substring isn't enough on its own: a plain substring
+    check would also match a listing that starts with the requested model
+    only to extend it into a different, pricier variant, e.g. "RTX 5070 Ti"
+    is literally a substring of "RTX 5070 Ti Super". So, same as the other
+    two retailer modules, a match is rejected in two cases: (1) the
+    character right after it is alphanumeric with no separating space at
+    all, e.g. a concatenated "RTX5070TiSuper"; or (2) the first word after
+    the match, once any whitespace is skipped, is one of a small known list
+    of GPU/CPU suffix qualifiers (`_SUFFIX_QUALIFIERS`, e.g. "Ti", "Super",
+    "XT"), e.g. "RTX 5070 Ti Super". Anything else after a space -- e.g.
+    "RTX 5070 Ti 16Go GDDR7" -- is unrelated trailing product text and
+    still counts as a match.
     """
-    return model.lower() in title.lower()
+    title_norm = title.lower()
+    model_norm = model.lower().strip()
+    start = title_norm.find(model_norm)
+    if start == -1:
+        return False
+    end = start + len(model_norm)
+    tail = title_norm[end:]
+    if tail and tail[0].isalnum():
+        return False
+    next_word = re.match(r"\s+([a-z0-9]+)", tail)
+    if next_word and next_word.group(1) in _SUFFIX_QUALIFIERS:
+        return False
+    return True
 
 
 def _search(query, title_filter=None):

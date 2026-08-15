@@ -171,7 +171,29 @@ def test_search_storage_prices_query_contains_size_and_type(mock_get):
     assert decoded_url.startswith("https://www.pccomponentes.fr/search?query=")
 
 
-from retailers.pccomponentes import search_cpu_prices, search_gpu_prices
+from retailers.pccomponentes import (
+    _title_matches_model,
+    search_cpu_prices,
+    search_gpu_prices,
+)
+
+
+def test_title_matches_model_rejects_suffix_qualifier_near_miss():
+    # "RTX 5070 Ti" is literally a substring of "RTX 5070 Ti Super" -- a
+    # plain substring check would wrongly match a different, pricier SKU
+    # here (NVIDIA has shipped "Ti Super" variants before, e.g. the RTX 4070
+    # Ti Super alongside the plain RTX 4070 Ti). Neither real fixture
+    # contains this pattern, so this is a synthetic card title.
+    title = "MSI RTX 5070 Ti Super Gaming X 16Go"
+    assert _title_matches_model(title, "RTX 5070 Ti") is False
+
+
+def test_title_matches_model_accepts_genuine_match_with_trailing_specs():
+    # Unrelated trailing product text after a space (e.g. a capacity/memory
+    # spec) must still count as a match -- only a known suffix qualifier or
+    # a concatenated alphanumeric run right after the match should reject.
+    title = "Carte Graphique MSI GeForce RTX 5070 Ti 16Go GDDR7 Reflex 2 RTX AI DLSS4"
+    assert _title_matches_model(title, "RTX 5070 Ti") is True
 
 
 EXPECTED_CPU_PRICES = [446.18, 435.0]
