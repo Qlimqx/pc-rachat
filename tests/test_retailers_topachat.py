@@ -1,7 +1,13 @@
 import json
 from unittest.mock import patch, Mock
 
-from retailers.topachat import search_prices, search_ram_prices, search_storage_prices
+from retailers.topachat import (
+    search_prices,
+    search_ram_prices,
+    search_storage_prices,
+    search_cpu_prices,
+    search_gpu_prices,
+)
 
 
 EXPECTED_PRICES = [
@@ -160,3 +166,106 @@ def test_search_storage_prices_query_and_category_label(mock_get):
     _, kwargs = mock_get.call_args
     assert kwargs["params"] == {"terms": "512Go ssd"}
     assert prices == STORAGE_EXPECTED_PRICES
+
+
+CPU_EXPECTED_PRICES = [469.99, 479.99]
+
+GPU_EXPECTED_PRICES = [
+    1299.99, 1299.99, 1379.99, 1379.99, 1299.99, 1249.99, 1159.99, 1249.99,
+    1399.99, 1299.99, 1299.99, 1399.99, 1499.99, 1469.99, 1329.99,
+]
+
+
+@patch("retailers.topachat.requests.get")
+def test_search_cpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/topachat_cpu_search.html", encoding="utf-8") as f:
+        fixture_json = json.load(f)
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = fixture_json
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == CPU_EXPECTED_PRICES
+
+
+@patch("retailers.topachat.requests.get", side_effect=Exception("network error"))
+def test_search_cpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_cpu_prices("Ryzen 7 9800X3D") == []
+
+
+@patch("retailers.topachat.requests.get")
+def test_search_cpu_prices_query_and_category_label(mock_get):
+    # Locks in both the exact query (bare CPU model, no "Processeur" prefix
+    # baked into the query itself -- unlike LDLC/Materiel.net which need that
+    # word in the search terms, TopAchat's category filtering does the work)
+    # and the category-label matching: verified live, "Processeur" is the
+    # real category label here (unlike RAM/storage above, where the guessed
+    # labels were both wrong -- this one happened to match the plan's
+    # starting guess). This test would catch a regression to a wrong label
+    # or an unintended query-wording change, since the fixture's
+    # "Processeur" category would then go unmatched and prices would come
+    # back empty.
+    with open("tests/fixtures/topachat_cpu_search.html", encoding="utf-8") as f:
+        fixture_json = json.load(f)
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = fixture_json
+    mock_get.return_value = mock_response
+
+    prices = search_cpu_prices("Ryzen 7 9800X3D")
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"] == {"terms": "Ryzen 7 9800X3D"}
+    assert prices == CPU_EXPECTED_PRICES
+
+
+@patch("retailers.topachat.requests.get")
+def test_search_gpu_prices_extracts_prices_from_real_fixture(mock_get):
+    with open("tests/fixtures/topachat_gpu_search.html", encoding="utf-8") as f:
+        fixture_json = json.load(f)
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = fixture_json
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    assert isinstance(prices, list)
+    assert all(isinstance(p, float) for p in prices)
+    assert prices == GPU_EXPECTED_PRICES
+
+
+@patch("retailers.topachat.requests.get", side_effect=Exception("network error"))
+def test_search_gpu_prices_returns_empty_list_on_network_failure(mock_get):
+    assert search_gpu_prices("RTX 5070 Ti") == []
+
+
+@patch("retailers.topachat.requests.get")
+def test_search_gpu_prices_query_and_category_label(mock_get):
+    # Locks in both the exact query (bare GPU model) and the category-label
+    # matching: verified live, "Carte graphique" is the real category label
+    # for standalone GPU listings, and it happened to match the plan's
+    # starting guess (unlike RAM/storage). This test would catch a
+    # regression to a wrong label or query-wording change, since the
+    # fixture's "Carte graphique" category would then go unmatched and
+    # prices would come back empty.
+    with open("tests/fixtures/topachat_gpu_search.html", encoding="utf-8") as f:
+        fixture_json = json.load(f)
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = fixture_json
+    mock_get.return_value = mock_response
+
+    prices = search_gpu_prices("RTX 5070 Ti")
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"] == {"terms": "RTX 5070 Ti"}
+    assert prices == GPU_EXPECTED_PRICES

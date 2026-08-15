@@ -116,3 +116,39 @@ def search_storage_prices(storage_go, storage_type):
     # empty list, not wrong prices). Only "ssd" is correctly wired for now.
     query = f"{storage_go}Go {storage_type}"
     return _search(query, storage_type)
+
+
+def search_cpu_prices(cpu_model):
+    # Verified live against the real API (GET with params={"terms": "Ryzen 7
+    # 9800X3D"}): unlike the plan's starting guess, "Processeur" turned out
+    # to be exactly right this time (contrast with RAM/storage above, where
+    # the guessed labels "Mémoire"/"Disque dur / SSD" were both wrong).
+    # The response's "Processeur" category reported nb_ref=2, and both of
+    # its 2 products were genuine standalone AMD Ryzen 7 9800X3D listings
+    # (one boxed, one "Version Tray") at 469,99EUR/479,99EUR -- 0% noise, and
+    # nb_ref matching the sampled count exactly means nothing was hidden by
+    # pagination. No title-relevance filtering is needed for this query: the
+    # other categories returned by the same search ("PC Gamer" prebuilts,
+    # "PC DIY" kits, "Kit d'évolution" motherboard+CPU bundles) are excluded
+    # entirely by the category-label filter already in _search, and the
+    # "Processeur" category itself contained no bundle/near-miss noise to
+    # filter further.
+    return _search(cpu_model, "Processeur")
+
+
+def search_gpu_prices(gpu_model):
+    # Verified live against the real API (GET with params={"terms": "RTX
+    # 5070 Ti"}): "Carte graphique" (the plan's starting guess) is correct.
+    # The response's "Carte graphique" category reported nb_ref=17; of the
+    # first 15 sampled, all 15 were genuine RTX 5070 Ti cards from various
+    # manufacturers (MSI, Gigabyte, Asus, Gainward) -- no plain "RTX 5070"
+    # (missing "Ti") or "RTX 5070 Ti Super" near-misses turned up, and the
+    # category's own url_category is already scoped to this exact model
+    # ("mc_est=RTX+5070+Ti"), consistent with 0% noise. The 2 unsampled
+    # results (nb_ref=17 vs. 15 returned by this endpoint) couldn't be
+    # inspected directly, but the same per-model category scoping applies to
+    # them. As with search_cpu_prices, the other categories in the same
+    # search ("PC Gamer", "PC Portable Gamer", "PC Portable", "PC DIY") are
+    # whole-machine/laptop listings already excluded by the category-label
+    # filter, so no extra title-relevance filtering is added here either.
+    return _search(gpu_model, "Carte graphique")
