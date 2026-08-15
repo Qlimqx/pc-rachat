@@ -445,6 +445,25 @@ def test_estimate_new_pc_price_calls_sources_concurrently():
     )
 
 
+from estimator import estimate_sell_grid
+
+
+def test_estimate_sell_grid_computes_price_per_percentage():
+    result = estimate_sell_grid(1000.0, [0.10, 0.20, 0.30])
+
+    assert result == [
+        {"pct": 0.10, "price": 100.0},
+        {"pct": 0.20, "price": 200.0},
+        {"pct": 0.30, "price": 300.0},
+    ]
+
+
+def test_estimate_sell_grid_rounds_to_two_decimals():
+    result = estimate_sell_grid(999.0, [0.10])
+
+    assert result == [{"pct": 0.10, "price": 99.9}]
+
+
 from estimator import estimate_buy_grid
 
 
@@ -455,33 +474,44 @@ def test_estimate_buy_grid_computes_price_per_tier():
         {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"},
     ]
 
-    result = estimate_buy_grid(1000.0, tiers)
+    result = estimate_buy_grid(1000.0, tiers, 50)
 
     assert result == [
         {"max_price": 400.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
         {"max_price": 440.0, "emoji": "✅", "label": "Intéressant", "is_last": False},
-        {"max_price": 1000.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+        {"max_price": 950.0, "emoji": "❌", "label": "Je passe", "is_last": True},
     ]
+
+
+def test_estimate_buy_grid_caps_tiers_at_margin_floor():
+    tiers = [
+        {"max_pct": 0.10, "emoji": "🔥", "label": "Très bonne affaire"},
+        {"max_pct": 0.50, "emoji": "🔴", "label": "Marge faible"},
+        {"max_pct": 1.00, "emoji": "❌", "label": "Je passe"},
+    ]
+
+    result = estimate_buy_grid(300.0, tiers, 200)
+
+    assert result == [
+        {"max_price": 30.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
+        {"max_price": 100.0, "emoji": "🔴", "label": "Marge faible", "is_last": False},
+        {"max_price": 100.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+    ]
+
+
+def test_estimate_buy_grid_floors_ceiling_at_zero():
+    tiers = [{"max_pct": 1.00, "emoji": "❌", "label": "Je passe"}]
+
+    result = estimate_buy_grid(100.0, tiers, 200)
+
+    assert result == [{"max_price": 0.0, "emoji": "❌", "label": "Je passe", "is_last": True}]
 
 
 def test_estimate_buy_grid_rounds_to_two_decimals():
     tiers = [{"max_pct": 0.415, "emoji": "🔥", "label": "Très bonne affaire"}]
 
-    result = estimate_buy_grid(999.0, tiers)
+    result = estimate_buy_grid(999.0, tiers, 0)
 
     assert result == [
         {"max_price": 414.59, "emoji": "🔥", "label": "Très bonne affaire", "is_last": True}
     ]
-
-
-from estimator import estimate_resale_target
-
-
-def test_estimate_resale_target_computes_min_and_max():
-    result = estimate_resale_target(1000.0, {"min_pct": 0.60, "max_pct": 0.68})
-    assert result == {"min": 600.0, "max": 680.0}
-
-
-def test_estimate_resale_target_rounds_to_two_decimals():
-    result = estimate_resale_target(999.0, {"min_pct": 0.601, "max_pct": 0.677})
-    assert result == {"min": 600.4, "max": 676.32}

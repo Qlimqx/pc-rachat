@@ -104,16 +104,20 @@ def test_format_result_omits_gpu_line_details_when_no_gpu_given():
 from cli import format_pricing_grid
 
 
-def test_format_pricing_grid_renders_tiers_and_resale_range():
-    buy_grid = [
-        {"max_price": 400.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
-        {"max_price": 1000.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+def test_format_pricing_grid_renders_sell_and_buy_tiers():
+    sell_grid = [
+        {"pct": 0.10, "price": 100.0},
+        {"pct": 0.30, "price": 300.0},
     ]
-    resale_target = {"min": 600.0, "max": 680.0}
+    buy_grid = [
+        {"max_price": 40.0, "emoji": "🔥", "label": "Très bonne affaire", "is_last": False},
+        {"max_price": 100.0, "emoji": "❌", "label": "Je passe", "is_last": True},
+    ]
 
-    output = format_pricing_grid(1000.0, buy_grid, resale_target)
+    output = format_pricing_grid(1000.0, sell_grid, buy_grid)
 
     assert "Prix neuf équivalent estimé : 1000.00€" in output
-    assert "jusqu'à 400.00€ 🔥 Très bonne affaire" in output
-    assert "au-delà de 1000.00€ ❌ Je passe" in output
-    assert "Prix de revente visé : 600.00€ – 680.00€" in output
+    assert "10% du neuf : 100.00€" in output
+    assert "30% du neuf : 300.00€" in output
+    assert "jusqu'à 40.00€ 🔥 Très bonne affaire" in output
+    assert "au-delà de 100.00€ ❌ Je passe" in output

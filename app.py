@@ -20,7 +20,7 @@ GPU_MODELS = cli_helpers.load_json(DATA_DIR / "gpu_models.json")
 def index():
     result = None
     buy_grid = None
-    resale_target = None
+    sell_grid = None
     new_pc_price = None
     error = None
     form_values = None
@@ -43,7 +43,8 @@ def index():
             reference_prices = cli_helpers.load_json(DATA_DIR / "reference_prices.json")
             component_rates = cli_helpers.load_json(DATA_DIR / "component_rates.json")
             buy_tiers = cli_helpers.load_json(DATA_DIR / "buy_tiers.json")
-            resale_config = cli_helpers.load_json(DATA_DIR / "resale_target.json")
+            sell_tiers = cli_helpers.load_json(DATA_DIR / "sell_tiers.json")
+            buy_margin = cli_helpers.load_json(DATA_DIR / "buy_margin.json")
 
             used_search_fn = cli_helpers.make_ebay_search_fn(client_id, client_secret)
             new_pc_search_fns = sourcing.make_new_pc_search_fn(client_id, client_secret)
@@ -71,14 +72,16 @@ def index():
             new_pc_result = estimator.estimate_new_pc_price(cpu_model, gpu_model, new_pc_search_fns)
             if new_pc_result is not None:
                 new_pc_price = new_pc_result["value"]
-                resale_target = estimator.estimate_resale_target(new_pc_price, resale_config)
-                buy_grid = estimator.estimate_buy_grid(resale_target["max"], buy_tiers)
+                sell_grid = estimator.estimate_sell_grid(new_pc_price, sell_tiers)
+                buy_grid = estimator.estimate_buy_grid(
+                    sell_grid[-1]["price"], buy_tiers, buy_margin["min_margin_eur"]
+                )
 
     return render_template(
         "index.html",
         result=result,
         buy_grid=buy_grid,
-        resale_target=resale_target,
+        sell_grid=sell_grid,
         new_pc_price=new_pc_price,
         error=error,
         form_values=form_values,

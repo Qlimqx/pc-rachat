@@ -229,7 +229,11 @@
 
       <h2>Prix de revente visé</h2>
       <div class="card">
-        <p>{{ "%.2f"|format(resale_target.min) }}€ – {{ "%.2f"|format(resale_target.max) }}€</p>
+        <ul class="result-list">
+          {% for tier in sell_grid %}
+            <li>{{ "%.0f"|format(tier.pct * 100) }}% du neuf : {{ "%.2f"|format(tier.price) }}€</li>
+          {% endfor %}
+        </ul>
       </div>
     {% elif result %}
       <p class="warning">Grille d'achat non disponible — aucun PC neuf comparable trouvé.</p>

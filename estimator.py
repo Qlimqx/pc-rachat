@@ -167,20 +167,26 @@ def _round2(value):
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def estimate_buy_grid(base_price, tiers):
+def estimate_sell_grid(new_pc_price, percentages):
+    return [
+        {"pct": pct, "price": _round2(new_pc_price * pct)}
+        for pct in percentages
+    ]
+
+
+def estimate_buy_grid(pv_price, tiers, min_margin):
+    # The buy price should never leave less than min_margin euros of gap to
+    # the resale target (pv_price) -- each percentage-based tier is capped
+    # at pv_price - min_margin, so a cheap PV never produces a "still worth
+    # buying" tier that would leave too little margin to bother reselling.
+    ceiling = max(pv_price - min_margin, 0)
     grid = []
     for index, tier in enumerate(tiers):
+        max_price = min(pv_price * tier["max_pct"], ceiling)
         grid.append({
-            "max_price": _round2(base_price * tier["max_pct"]),
+            "max_price": _round2(max_price),
             "emoji": tier["emoji"],
             "label": tier["label"],
             "is_last": index == len(tiers) - 1,
         })
     return grid
-
-
-def estimate_resale_target(new_pc_price, resale_config):
-    return {
-        "min": _round2(new_pc_price * resale_config["min_pct"]),
-        "max": _round2(new_pc_price * resale_config["max_pct"]),
-    }
