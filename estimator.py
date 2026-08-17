@@ -114,33 +114,33 @@ def estimate_pc(
     cpu_search_fns,
     gpu_search_fns,
 ):
-    breakdown = {}
-    missing = []
-
-    breakdown["cpu"] = estimate_component(
-        cpu_model, "cpu", ebay_search_fn, reference_prices, cpu_search_fns
-    )
-    if breakdown["cpu"] is None:
-        missing.append("cpu")
-
-    breakdown["ram"] = estimate_ram(ram_go, ram_type, ram_search_fns, component_rates)
-    if breakdown["ram"] is None:
-        missing.append("ram")
-
-    breakdown["storage"] = estimate_storage(
-        storage_go, storage_type, storage_search_fns, component_rates
-    )
-    if breakdown["storage"] is None:
-        missing.append("storage")
-
+    # cpu/ram/storage/gpu each do their own independent multi-source network
+    # search (see _aggregate_market_prices) -- running them one after another
+    # made a single request's worst-case wall time the SUM of all 4 searches
+    # (up to ~40s), which was slow enough to trip both gunicorn's and
+    # Render's own proxy timeout. Running them concurrently here (nested
+    # thread pools are fine -- Python releases the GIL during the blocking
+    # I/O each one does) cuts worst-case wall time to the SLOWEST single
+    # search instead, matching the pattern already used inside
+    # _aggregate_market_prices for combining sources within one search.
+    keys = ["cpu", "ram", "storage"]
     if gpu_model:
-        breakdown["gpu"] = estimate_component(
-            gpu_model, "gpu", ebay_search_fn, reference_prices, gpu_search_fns
-        )
-        if breakdown["gpu"] is None:
-            missing.append("gpu")
-    else:
-        breakdown["gpu"] = None
+        keys.append("gpu")
+
+    def compute(key):
+        if key == "cpu":
+            return estimate_component(cpu_model, "cpu", ebay_search_fn, reference_prices, cpu_search_fns)
+        if key == "ram":
+            return estimate_ram(ram_go, ram_type, ram_search_fns, component_rates)
+        if key == "storage":
+            return estimate_storage(storage_go, storage_type, storage_search_fns, component_rates)
+        return estimate_component(gpu_model, "gpu", ebay_search_fn, reference_prices, gpu_search_fns)
+
+    with ThreadPoolExecutor(max_workers=len(keys)) as executor:
+        results = dict(zip(keys, executor.map(compute, keys)))
+
+    breakdown = {key: results.get(key) for key in ["cpu", "ram", "storage", "gpu"]}
+    missing = [key for key in keys if breakdown[key] is None]
 
     total = sum(r["value"] for r in breakdown.values() if r is not None)
 

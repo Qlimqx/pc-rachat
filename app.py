@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -53,23 +54,32 @@ def index():
             cpu_search_fns = sourcing.make_cpu_search_fn()
             gpu_search_fns = sourcing.make_gpu_search_fn()
 
-            result = estimator.estimate_pc(
-                cpu_model=cpu_model,
-                ram_go=ram_go,
-                ram_type=ram_type,
-                storage_go=storage_go,
-                storage_type=storage_type,
-                gpu_model=gpu_model,
-                ebay_search_fn=used_search_fn,
-                reference_prices=reference_prices,
-                component_rates=component_rates,
-                ram_search_fns=ram_search_fns,
-                storage_search_fns=storage_search_fns,
-                cpu_search_fns=cpu_search_fns,
-                gpu_search_fns=gpu_search_fns,
-            )
-
-            new_pc_result = estimator.estimate_new_pc_price(cpu_model, gpu_model, new_pc_search_fns)
+            # estimate_pc and estimate_new_pc_price each do their own
+            # independent network searches -- run them concurrently instead
+            # of one after the other so a single request's wall time is
+            # bounded by the slower of the two, not their sum.
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                result_future = executor.submit(
+                    estimator.estimate_pc,
+                    cpu_model=cpu_model,
+                    ram_go=ram_go,
+                    ram_type=ram_type,
+                    storage_go=storage_go,
+                    storage_type=storage_type,
+                    gpu_model=gpu_model,
+                    ebay_search_fn=used_search_fn,
+                    reference_prices=reference_prices,
+                    component_rates=component_rates,
+                    ram_search_fns=ram_search_fns,
+                    storage_search_fns=storage_search_fns,
+                    cpu_search_fns=cpu_search_fns,
+                    gpu_search_fns=gpu_search_fns,
+                )
+                new_pc_future = executor.submit(
+                    estimator.estimate_new_pc_price, cpu_model, gpu_model, new_pc_search_fns
+                )
+                result = result_future.result()
+                new_pc_result = new_pc_future.result()
             if new_pc_result is not None:
                 new_pc_price = new_pc_result["value"]
                 sell_grid = estimator.estimate_sell_grid(new_pc_price, sell_tiers)
