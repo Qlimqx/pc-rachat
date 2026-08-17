@@ -57,9 +57,13 @@ L'appli web (`app.py`) est prête à être déployée sur [Render](https://rende
 1. Connecte ton compte Render à GitHub et sélectionne ce repo.
 2. Render détecte automatiquement `render.yaml` (Blueprint) — sinon, configure manuellement :
    - Build command : `pip install -r requirements.txt`
-   - Start command : `gunicorn app:app`
+   - Start command : `gunicorn app:app --timeout 90 --workers 2`
 3. Dans les paramètres du service Render, ajoute tes variables d'environnement : `EBAY_CLIENT_ID` et `EBAY_CLIENT_SECRET` (les mêmes valeurs que dans ton `.env` local — voir la section eBay ci-dessus).
 4. Déploie. Render te donne une URL publique (`https://<nom-du-service>.onrender.com`).
+
+**Important — si le service a été créé manuellement (pas via Blueprint) :** Render utilise le "Start Command" défini dans Settings sur le dashboard en priorité sur `Procfile`/`render.yaml`. Si tu modifies la commande gunicorn dans ce repo (ex: `--timeout`, `--workers`), pense à répercuter le changement manuellement dans Settings → Start Command sur le dashboard Render, sinon il sera silencieusement ignoré.
+
+`--timeout 90` évite qu'une recherche lente (plusieurs sources interrogées en parallèle) ne dépasse le timeout par défaut de gunicorn (30s) et fasse planter le worker (`WORKER TIMEOUT` / `SIGKILL` dans les logs, erreur 502 côté client). `--workers 2` évite qu'une recherche en cours ne bloque les autres requêtes (y compris les vérifications de santé de Render) avec un seul worker `sync`.
 
 Sans ces variables configurées sur Render, l'appli fonctionne quand même pour le détail par composant (table de référence locale), mais la recherche eBay est désactivée jusqu'à ce que les clés soient ajoutées.
 
