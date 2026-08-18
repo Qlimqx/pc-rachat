@@ -181,13 +181,19 @@ def test_search_storage_prices_query_contains_size_and_type(mock_get):
     assert "512Go" in decoded_url
 
 
-EXPECTED_CPU_PRICES = [479.95, 499.95, 431.95]
+# Both fixtures contain noise that _title_matches_model now correctly
+# excludes (previously counted at face value, before title filtering was
+# added to this file): the CPU fixture has one genuine-model "- Occasion"
+# (used) listing at 431.95EUR that must not count as a new-market price;
+# the GPU fixture has 4 "- Occasion" RTX 5070 Ti listings plus 6 genuine
+# RTX 5070 (non-Ti) listings that don't match the "RTX 5070 Ti" query at
+# all -- both independently verified against the fixture HTML.
+EXPECTED_CPU_PRICES = [479.95, 499.95]
 
 EXPECTED_GPU_PRICES = [
-    1199.95, 1339.95, 1079.95, 1279.95, 1599.95, 1499.95, 1529.95, 1329.95,
-    1329.95, 1399.95, 1279.95, 1399.95, 1429.95, 1329.95, 1349.95, 1429.95,
-    1151.96, 1151.96, 1196.96, 1399.95, 1329.95, 839.95, 899.95, 849.95,
-    764.96, 764.96, 979.95,
+    1199.95, 1339.95, 1279.95, 1599.95, 1499.95, 1529.95, 1329.95, 1329.95,
+    1399.95, 1279.95, 1399.95, 1429.95, 1329.95, 1349.95, 1429.95, 1399.95,
+    1329.95,
 ]
 
 
@@ -281,3 +287,60 @@ def test_search_gpu_prices_query_contains_anchor_and_model(mock_get):
 
     assert "Carte graphique" in decoded_url
     assert "RTX 5070 Ti" in decoded_url
+
+
+from retailers.ldlc import _title_matches_model
+
+
+def test_title_matches_model_rejects_occasion_listing():
+    assert _title_matches_model("AMD Ryzen 7 9800X3D (4.7 GHz) - Occasion", "Ryzen 7 9800X3D") is False
+
+
+def test_title_matches_model_rejects_wrong_model():
+    assert _title_matches_model("MSI GeForce RTX 5090 32G SUPRIM SOC", "GTX 1650 Super") is False
+
+
+def test_title_matches_model_rejects_non_gpu_accessory():
+    assert _title_matches_model("Mars Gaming MCA-GCB Pro (Noir)", "GTX 1650 Super") is False
+
+
+def test_title_matches_model_rejects_suffix_qualifier_near_miss():
+    assert _title_matches_model("ASUS PRIME GeForce RTX 5070 Ti Super OC", "RTX 5070 Ti") is False
+
+
+def test_title_matches_model_accepts_genuine_new_match():
+    assert _title_matches_model("AMD Ryzen 7 9800X3D (4.7 GHz / 5.2 GHz)", "Ryzen 7 9800X3D") is True
+    assert _title_matches_model("ASUS PRIME GeForce RTX 5070 Ti 16GB GDDR7 OC Edition", "RTX 5070 Ti") is True
+
+
+@patch("retailers.ldlc.requests.get")
+def test_search_gpu_prices_returns_empty_for_a_discontinued_gpu(mock_get):
+    # Regression test for the real bug this filter fixes: before
+    # title_filter existed, "Carte graphique GTX 1650 Super" (a GPU no
+    # longer sold new) returned unrelated GPUs (RTX 3070 Ti, RTX 4070
+    # SUPER, a 5399,95EUR RTX 5090), used listings, and non-GPU accessories
+    # (GPU brackets, vertical-mount kits) -- none of which genuinely match
+    # "GTX 1650 Super" -- and a median computed over that noise was reported
+    # as a real "marché neuf" price. With filtering, none of these fake
+    # cards should pass, and the function must return an empty list so
+    # estimate_component correctly falls through to the eBay occasion
+    # search instead.
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = """
+    <li class="pdt-item">
+        <div class="pdt-desc"><h3 class="title-3"><a>MSI GeForce RTX 3070 Ti SUPRIM X 8G LHR - Occasion</a></h3></div>
+        <div class="basket"><div class="price"><div class="price">399<sup>95</sup></div></div></div>
+    </li>
+    <li class="pdt-item">
+        <div class="pdt-desc"><h3 class="title-3"><a>MSI GeForce RTX 5090 32G SUPRIM SOC</a></h3></div>
+        <div class="basket"><div class="price"><div class="price">5399<sup>95</sup></div></div></div>
+    </li>
+    <li class="pdt-item">
+        <div class="pdt-desc"><h3 class="title-3"><a>Mars Gaming MCA-GCB Pro (Noir)</a></h3></div>
+        <div class="basket"><div class="price"><div class="price">7<sup>90</sup></div></div></div>
+    </li>
+    """
+    mock_get.return_value = mock_response
+
+    assert search_gpu_prices("GTX 1650 Super") == []
