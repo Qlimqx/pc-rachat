@@ -73,6 +73,46 @@ def make_ebay_search_fn(client_id, client_secret):
     return real_ebay_search
 
 
+def make_ebay_used_ram_fn(client_id, client_secret):
+    if not client_id or not client_secret:
+        return lambda ram_go, ram_type: []
+
+    def real_search(ram_go, ram_type):
+        prices = ebay_client.search_used_ram_prices(ram_go, ram_type, client_id, client_secret)
+        return prices if prices else []
+
+    return real_search
+
+
+def make_ebay_used_storage_fn(client_id, client_secret):
+    if not client_id or not client_secret:
+        return lambda storage_go, storage_type: []
+
+    def real_search(storage_go, storage_type):
+        prices = ebay_client.search_used_storage_prices(storage_go, storage_type, client_id, client_secret)
+        return prices if prices else []
+
+    return real_search
+
+
+def make_similar_used_search_fn(client_id, client_secret):
+    if not client_id or not client_secret:
+        return lambda cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model: []
+
+    def real_search(cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model):
+        return ebay_client.search_similar_used_pc_prices(
+            cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model, client_id, client_secret
+        )
+
+    return real_search
+
+
+def format_similar_used_price(similar_result):
+    if similar_result is None:
+        return "Configs d'occasion similaires : aucune annonce comparable trouvée."
+    return f"Configs d'occasion similaires : {similar_result['value']:.2f}€ ({similar_result['method']})"
+
+
 def format_pricing_grid(new_pc_price, sell_grid, buy_grid):
     lines = [f"Prix neuf équivalent estimé : {new_pc_price:.2f}€", "", "Prix de revente visé :"]
     for tier in sell_grid:
@@ -114,6 +154,9 @@ def main():
     storage_search_fns = sourcing.make_storage_search_fn(client_id, client_secret)
     cpu_search_fns = sourcing.make_cpu_search_fn()
     gpu_search_fns = sourcing.make_gpu_search_fn()
+    similar_used_search_fn = make_similar_used_search_fn(client_id, client_secret)
+    ram_used_search_fn = make_ebay_used_ram_fn(client_id, client_secret)
+    storage_used_search_fn = make_ebay_used_storage_fn(client_id, client_secret)
 
     print("=== Estimation de rachat PC ===\n")
     cpu_model = input("Modèle CPU (ex: i5-10400) : ").strip()
@@ -123,11 +166,11 @@ def main():
     storage_type = prompt_choice("Type stockage (hdd/ssd/nvme) : ", ["hdd", "ssd", "nvme"])
     gpu_model = input("Modèle GPU (laisser vide si carte intégrée) : ").strip()
 
-    # estimate_pc and estimate_new_pc_price each do their own independent
-    # network searches -- run them concurrently instead of one after the
-    # other so total wait time is bounded by the slower of the two, not
-    # their sum.
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    # estimate_pc, estimate_new_pc_price and estimate_similar_used_price each
+    # do their own independent network searches -- run them concurrently
+    # instead of one after the other so total wait time is bounded by the
+    # slowest of the three, not their sum.
+    with ThreadPoolExecutor(max_workers=3) as executor:
         result_future = executor.submit(
             estimator.estimate_pc,
             cpu_model=cpu_model,
@@ -143,21 +186,30 @@ def main():
             storage_search_fns=storage_search_fns,
             cpu_search_fns=cpu_search_fns,
             gpu_search_fns=gpu_search_fns,
+            ram_used_search_fn=ram_used_search_fn,
+            storage_used_search_fn=storage_used_search_fn,
         )
         new_pc_future = executor.submit(
             estimator.estimate_new_pc_price, cpu_model, gpu_model, new_pc_search_fns
         )
+        similar_used_future = executor.submit(
+            estimator.estimate_similar_used_price,
+            cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model, similar_used_search_fn,
+        )
         result = result_future.result()
         new_pc_result = new_pc_future.result()
+        similar_used_result = similar_used_future.result()
     print()
     if new_pc_result is not None:
-        sell_grid = estimator.estimate_sell_grid(new_pc_result["value"], sell_tiers)
+        sell_grid = estimator.estimate_sell_grid(new_pc_result["value"], sell_tiers, result["total"])
         buy_grid = estimator.estimate_buy_grid(
             sell_grid[0]["price"], buy_tiers, buy_margin["min_margin_pct"]
         )
         print(format_pricing_grid(new_pc_result["value"], sell_grid, buy_grid))
     else:
         print("Grille d'achat non disponible — aucun PC neuf comparable trouvé.")
+
+    print("\n" + format_similar_used_price(similar_used_result))
 
     print("\n" + format_result(result))
 

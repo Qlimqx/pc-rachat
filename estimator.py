@@ -53,22 +53,39 @@ def _aggregate_market_prices(search_fns, *args):
     return all_prices
 
 
-def estimate_ram(size_go, ram_type, search_fns, rates):
+def estimate_ram(size_go, ram_type, search_fns, rates, used_search_fn):
+    # search_fns are all new-condition sources (retailers + eBay new-condition
+    # search) -- if none find a result, try a genuine eBay used-condition
+    # search before falling back to the €/Go formula, so "no new listing
+    # found" doesn't silently jump straight to the (much lower, used-market-
+    # calibrated) formula while skipping actual used-market data that exists.
     all_prices = _aggregate_market_prices(search_fns, size_go, ram_type)
     if all_prices:
         return {
             "value": median_price(all_prices),
             "method": f"médiane sur {len(all_prices)} annonces neuves",
         }
+    used_prices = used_search_fn(size_go, ram_type)
+    if used_prices:
+        return {
+            "value": median_price(used_prices),
+            "method": f"médiane sur {len(used_prices)} annonces eBay occasion",
+        }
     return _estimate_by_rate(size_go, ram_type, rates, "ram")
 
 
-def estimate_storage(size_go, storage_type, search_fns, rates):
+def estimate_storage(size_go, storage_type, search_fns, rates, used_search_fn):
     all_prices = _aggregate_market_prices(search_fns, size_go, storage_type)
     if all_prices:
         return {
             "value": median_price(all_prices),
             "method": f"médiane sur {len(all_prices)} annonces neuves",
+        }
+    used_prices = used_search_fn(size_go, storage_type)
+    if used_prices:
+        return {
+            "value": median_price(used_prices),
+            "method": f"médiane sur {len(used_prices)} annonces eBay occasion",
         }
     return _estimate_by_rate(size_go, storage_type, rates, "storage")
 
@@ -113,6 +130,8 @@ def estimate_pc(
     storage_search_fns,
     cpu_search_fns,
     gpu_search_fns,
+    ram_used_search_fn,
+    storage_used_search_fn,
 ):
     # cpu/ram/storage/gpu each do their own independent multi-source network
     # search (see _aggregate_market_prices) -- running them one after another
@@ -131,9 +150,11 @@ def estimate_pc(
         if key == "cpu":
             return estimate_component(cpu_model, "cpu", ebay_search_fn, reference_prices, cpu_search_fns)
         if key == "ram":
-            return estimate_ram(ram_go, ram_type, ram_search_fns, component_rates)
+            return estimate_ram(ram_go, ram_type, ram_search_fns, component_rates, ram_used_search_fn)
         if key == "storage":
-            return estimate_storage(storage_go, storage_type, storage_search_fns, component_rates)
+            return estimate_storage(
+                storage_go, storage_type, storage_search_fns, component_rates, storage_used_search_fn
+            )
         return estimate_component(gpu_model, "gpu", ebay_search_fn, reference_prices, gpu_search_fns)
 
     with ThreadPoolExecutor(max_workers=len(keys)) as executor:
@@ -159,6 +180,21 @@ def estimate_new_pc_price(cpu_model, gpu_model, search_fns):
     }
 
 
+def estimate_similar_used_price(cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model, search_fn):
+    # Purely informational reference (not used to adjust the sell/buy grids):
+    # what similar full configs (same CPU/GPU/RAM/storage) actually sell for
+    # used, as a sanity check alongside the component-sum floor and the
+    # new-PC-based ceiling. Single-source (eBay) -- unlike the multi-source
+    # searches above, no French retailer sells whole used PCs at retail.
+    prices = search_fn(cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model)
+    if not prices:
+        return None
+    return {
+        "value": median_price(prices),
+        "method": f"médiane sur {len(prices)} annonces d'occasion similaires",
+    }
+
+
 def _round2(value):
     # Plain round() on a binary float can land just below a .xx5 boundary
     # (e.g. 999.0 * 0.415 == 414.58499999999997...) and round the wrong way.
@@ -167,11 +203,18 @@ def _round2(value):
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def estimate_sell_grid(new_pc_price, discount_percentages):
+def estimate_sell_grid(new_pc_price, discount_percentages, floor):
     # Each entry is "neuf minus X%" (a discount off the new-PC price), not a
     # straight percentage of it -- e.g. pct=0.10 means 90% of new_pc_price.
+    # floor is the component-breakdown total (estimate_pc's "total") -- the
+    # cost of buying the same parts separately. Without this clamp, an
+    # aggressive discount tier can undercut that total (observed live: a
+    # Ryzen 7 5700X + RTX 4060 build's neuf-30% tier came out to 1084.93€,
+    # BELOW its 1099.92€ component total), which recommends asking less for
+    # the whole PC than the parts alone are worth -- incoherent, since
+    # parting it out would then beat selling it whole.
     return [
-        {"pct": pct, "price": _round2(new_pc_price * (1 - pct))}
+        {"pct": pct, "price": max(_round2(new_pc_price * (1 - pct)), floor)}
         for pct in discount_percentages
     ]
 

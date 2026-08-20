@@ -240,6 +240,17 @@
     {% endif %}
 
     {% if result %}
+      <h2>Configs d'occasion similaires</h2>
+      <div class="card">
+        {% if similar_used_result %}
+          <p>{{ "%.2f"|format(similar_used_result.value) }}€ ({{ similar_used_result.method }})</p>
+        {% else %}
+          <p class="warning">Aucune annonce comparable trouvée.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if result %}
       <h2>Détail par composant</h2>
       <div class="card">
         <ul class="result-list">

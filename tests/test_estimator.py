@@ -19,27 +19,30 @@ RATES = {
 }
 
 
+NO_USED = lambda *args: []
+
+
 def test_estimate_ram_known_type():
-    result = estimate_ram(16, "ddr4", [], RATES)
+    result = estimate_ram(16, "ddr4", [], RATES, NO_USED)
     assert result == {"value": 32.0, "method": "formule €/Go"}
 
 
 def test_estimate_ram_unknown_type_returns_none():
-    assert estimate_ram(16, "ddr7", [], RATES) is None
+    assert estimate_ram(16, "ddr7", [], RATES, NO_USED) is None
 
 
 def test_estimate_ram_type_is_case_insensitive():
-    result = estimate_ram(8, "DDR4", [], RATES)
+    result = estimate_ram(8, "DDR4", [], RATES, NO_USED)
     assert result == {"value": 16.0, "method": "formule €/Go"}
 
 
 def test_estimate_storage_known_type():
-    result = estimate_storage(512, "ssd", [], RATES)
+    result = estimate_storage(512, "ssd", [], RATES, NO_USED)
     assert result == {"value": 25.6, "method": "formule €/Go"}
 
 
 def test_estimate_storage_unknown_type_returns_none():
-    assert estimate_storage(512, "zip-disk", [], RATES) is None
+    assert estimate_storage(512, "zip-disk", [], RATES, NO_USED) is None
 
 
 def test_estimate_ram_uses_market_median_when_sources_find_prices():
@@ -49,7 +52,7 @@ def test_estimate_ram_uses_market_median_when_sources_find_prices():
     def source_b(size_go, ram_type):
         return [320.0]
 
-    result = estimate_ram(32, "ddr5", [source_a, source_b], RATES)
+    result = estimate_ram(32, "ddr5", [source_a, source_b], RATES, NO_USED)
 
     assert result == {"value": 300.0, "method": "médiane sur 3 annonces neuves"}
 
@@ -58,22 +61,43 @@ def test_estimate_ram_falls_back_to_formula_when_no_market_results():
     def empty_source(size_go, ram_type):
         return []
 
-    result = estimate_ram(16, "ddr4", [empty_source], RATES)
+    result = estimate_ram(16, "ddr4", [empty_source], RATES, NO_USED)
 
     assert result == {"value": 32.0, "method": "formule €/Go"}
 
 
 def test_estimate_ram_falls_back_to_formula_when_no_search_fns():
-    result = estimate_ram(16, "ddr4", [], RATES)
+    result = estimate_ram(16, "ddr4", [], RATES, NO_USED)
 
     assert result == {"value": 32.0, "method": "formule €/Go"}
+
+
+def test_estimate_ram_falls_back_to_ebay_used_before_formula():
+    def used_search(size_go, ram_type):
+        return [90.0, 100.0]
+
+    result = estimate_ram(16, "ddr4", [], RATES, used_search)
+
+    assert result == {"value": 95.0, "method": "médiane sur 2 annonces eBay occasion"}
+
+
+def test_estimate_ram_prefers_new_market_median_over_used_when_both_available():
+    def new_source(size_go, ram_type):
+        return [280.0, 300.0]
+
+    def used_search(size_go, ram_type):
+        return [90.0]
+
+    result = estimate_ram(32, "ddr5", [new_source], RATES, used_search)
+
+    assert result == {"value": 290.0, "method": "médiane sur 2 annonces neuves"}
 
 
 def test_estimate_storage_uses_market_median_when_sources_find_prices():
     def source_a(size_go, storage_type):
         return [45.0, 50.0, 55.0]
 
-    result = estimate_storage(512, "ssd", [source_a], RATES)
+    result = estimate_storage(512, "ssd", [source_a], RATES, NO_USED)
 
     assert result == {"value": 50.0, "method": "médiane sur 3 annonces neuves"}
 
@@ -82,9 +106,18 @@ def test_estimate_storage_falls_back_to_formula_when_no_market_results():
     def empty_source(size_go, storage_type):
         return []
 
-    result = estimate_storage(512, "ssd", [empty_source], RATES)
+    result = estimate_storage(512, "ssd", [empty_source], RATES, NO_USED)
 
     assert result == {"value": 25.6, "method": "formule €/Go"}
+
+
+def test_estimate_storage_falls_back_to_ebay_used_before_formula():
+    def used_search(size_go, storage_type):
+        return [30.0, 40.0]
+
+    result = estimate_storage(512, "ssd", [], RATES, used_search)
+
+    assert result == {"value": 35.0, "method": "médiane sur 2 annonces eBay occasion"}
 
 
 def test_estimate_ram_aggregates_sources_concurrently():
@@ -100,7 +133,7 @@ def test_estimate_ram_aggregates_sources_concurrently():
     slow_sources = [make_slow_source(280.0 + i) for i in range(5)]
 
     start = time.perf_counter()
-    result = estimate_ram(32, "ddr5", slow_sources, RATES)
+    result = estimate_ram(32, "ddr5", slow_sources, RATES, NO_USED)
     elapsed = time.perf_counter() - start
 
     assert result is not None
@@ -239,6 +272,8 @@ def test_estimate_pc_full_breakdown_and_total():
         storage_search_fns=[],
         cpu_search_fns=[],
         gpu_search_fns=[],
+        ram_used_search_fn=lambda *args: [],
+        storage_used_search_fn=lambda *args: [],
     )
 
     assert result["breakdown"]["cpu"]["value"] == 55.0
@@ -268,6 +303,8 @@ def test_estimate_pc_without_gpu():
         storage_search_fns=[],
         cpu_search_fns=[],
         gpu_search_fns=[],
+        ram_used_search_fn=lambda *args: [],
+        storage_used_search_fn=lambda *args: [],
     )
 
     assert result["breakdown"]["gpu"] is None
@@ -294,6 +331,8 @@ def test_estimate_pc_flags_missing_components():
         storage_search_fns=[],
         cpu_search_fns=[],
         gpu_search_fns=[],
+        ram_used_search_fn=lambda *args: [],
+        storage_used_search_fn=lambda *args: [],
     )
 
     assert result["missing"] == ["cpu", "gpu"]
@@ -326,6 +365,8 @@ def test_estimate_pc_uses_market_prices_for_ram_and_storage_when_available():
         storage_search_fns=[storage_source],
         cpu_search_fns=[],
         gpu_search_fns=[],
+        ram_used_search_fn=lambda *args: [],
+        storage_used_search_fn=lambda *args: [],
     )
 
     assert result["breakdown"]["ram"] == {
@@ -363,6 +404,8 @@ def test_estimate_pc_uses_new_price_for_cpu_and_gpu_when_available():
         storage_search_fns=[],
         cpu_search_fns=[cpu_source],
         gpu_search_fns=[gpu_source],
+        ram_used_search_fn=lambda *args: [],
+        storage_used_search_fn=lambda *args: [],
     )
 
     assert result["breakdown"]["cpu"] == {
@@ -445,11 +488,43 @@ def test_estimate_new_pc_price_calls_sources_concurrently():
     )
 
 
+from estimator import estimate_similar_used_price
+
+
+def test_estimate_similar_used_price_returns_median_and_method():
+    def search_fn(cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model):
+        assert cpu_model == "i5-10400F"
+        assert (ram_go, ram_type) == (16, "ddr4")
+        assert (storage_go, storage_type) == (512, "ssd")
+        assert gpu_model == "GTX 1650 Super"
+        return [450.0, 480.0, 500.0]
+
+    result = estimate_similar_used_price(
+        "i5-10400F", 16, "ddr4", 512, "ssd", "GTX 1650 Super", search_fn
+    )
+
+    assert result == {
+        "value": 480.0,
+        "method": "médiane sur 3 annonces d'occasion similaires",
+    }
+
+
+def test_estimate_similar_used_price_returns_none_when_search_fn_finds_nothing():
+    def empty_search_fn(*args):
+        return []
+
+    result = estimate_similar_used_price(
+        "cpu", 16, "ddr4", 512, "ssd", "gpu", empty_search_fn
+    )
+
+    assert result is None
+
+
 from estimator import estimate_sell_grid
 
 
 def test_estimate_sell_grid_computes_new_price_minus_discount():
-    result = estimate_sell_grid(1000.0, [0.10, 0.20, 0.30])
+    result = estimate_sell_grid(1000.0, [0.10, 0.20, 0.30], floor=0.0)
 
     assert result == [
         {"pct": 0.10, "price": 900.0},
@@ -459,9 +534,30 @@ def test_estimate_sell_grid_computes_new_price_minus_discount():
 
 
 def test_estimate_sell_grid_rounds_to_two_decimals():
-    result = estimate_sell_grid(999.0, [0.10])
+    result = estimate_sell_grid(999.0, [0.10], floor=0.0)
 
     assert result == [{"pct": 0.10, "price": 899.1}]
+
+
+def test_estimate_sell_grid_clamps_tiers_at_the_component_floor():
+    # Regression test: live-observed case (Ryzen 7 5700X + RTX 4060, 16Go
+    # DDR4, 512Go SSD) where the neuf-30% tier (1084.93€) came out BELOW the
+    # component breakdown total (1099.92€) -- recommending a resale price
+    # lower than what the parts alone are worth separately. No sell tier may
+    # go below the component floor.
+    result = estimate_sell_grid(1549.90, [0.10, 0.20, 0.30], floor=1099.92)
+
+    assert result == [
+        {"pct": 0.10, "price": 1394.91},
+        {"pct": 0.20, "price": 1239.92},
+        {"pct": 0.30, "price": 1099.92},
+    ]
+
+
+def test_estimate_sell_grid_floor_does_not_affect_tiers_already_above_it():
+    result = estimate_sell_grid(1000.0, [0.10], floor=100.0)
+
+    assert result == [{"pct": 0.10, "price": 900.0}]
 
 
 from estimator import estimate_buy_grid

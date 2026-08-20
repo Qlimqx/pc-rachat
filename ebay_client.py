@@ -66,6 +66,21 @@ def search_new_pc_prices(cpu_model, gpu_model, client_id, client_secret):
         return []
 
 
+def search_similar_used_pc_prices(
+    cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model, client_id, client_secret
+):
+    try:
+        token = get_access_token(client_id, client_secret)
+        parts = [cpu_model]
+        if gpu_model:
+            parts.append(gpu_model)
+        parts.append(f"{ram_go}Go {ram_type}")
+        parts.append(f"{storage_go}Go {storage_type}")
+        return search_used_prices(" ".join(parts), token)
+    except Exception:
+        return []
+
+
 def search_ram_prices(ram_go, ram_type, client_id, client_secret):
     try:
         token = get_access_token(client_id, client_secret)
@@ -79,5 +94,21 @@ def search_storage_prices(storage_go, storage_type, client_id, client_secret):
         token = get_access_token(client_id, client_secret)
         # "interne" biases results toward internal drives rather than external/USB enclosures (not live-validated against real eBay results -- no API credentials available in this environment)
         return search_new_prices(f"{storage_go}Go {storage_type} interne", token)
+    except Exception:
+        return []
+
+
+def search_used_ram_prices(ram_go, ram_type, client_id, client_secret):
+    try:
+        token = get_access_token(client_id, client_secret)
+        return search_used_prices(f"{ram_go}Go {ram_type} RAM", token)
+    except Exception:
+        return []
+
+
+def search_used_storage_prices(storage_go, storage_type, client_id, client_secret):
+    try:
+        token = get_access_token(client_id, client_secret)
+        return search_used_prices(f"{storage_go}Go {storage_type} interne", token)
     except Exception:
         return []

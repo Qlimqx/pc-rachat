@@ -186,3 +186,80 @@ def test_search_storage_prices_returns_prices_on_success(mock_token, mock_search
 def test_search_storage_prices_returns_empty_list_on_failure(mock_token):
     result = search_storage_prices(512, "ssd", "id", "secret")
     assert result == []
+
+
+from ebay_client import search_used_ram_prices, search_used_storage_prices
+
+
+@patch("ebay_client.search_used_prices")
+@patch("ebay_client.get_access_token")
+def test_search_used_ram_prices_uses_used_condition_search(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = [90.0, 100.0]
+
+    result = search_used_ram_prices(16, "ddr4", "id", "secret")
+
+    assert result == [90.0, 100.0]
+    mock_search.assert_called_once_with("16Go ddr4 RAM", "tok")
+
+
+@patch("ebay_client.get_access_token", side_effect=Exception("network error"))
+def test_search_used_ram_prices_returns_empty_list_on_failure(mock_token):
+    result = search_used_ram_prices(16, "ddr4", "id", "secret")
+    assert result == []
+
+
+@patch("ebay_client.search_used_prices")
+@patch("ebay_client.get_access_token")
+def test_search_used_storage_prices_uses_used_condition_search(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = [30.0, 40.0]
+
+    result = search_used_storage_prices(512, "ssd", "id", "secret")
+
+    assert result == [30.0, 40.0]
+    mock_search.assert_called_once_with("512Go ssd interne", "tok")
+
+
+@patch("ebay_client.get_access_token", side_effect=Exception("network error"))
+def test_search_used_storage_prices_returns_empty_list_on_failure(mock_token):
+    result = search_used_storage_prices(512, "ssd", "id", "secret")
+    assert result == []
+
+
+from ebay_client import search_similar_used_pc_prices
+
+
+@patch("ebay_client.search_used_prices")
+@patch("ebay_client.get_access_token")
+def test_search_similar_used_pc_prices_uses_used_condition_search(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = [450.0, 480.0]
+
+    result = search_similar_used_pc_prices(
+        "i5-10400F", 16, "ddr4", 512, "ssd", "GTX 1650 Super", "id", "secret"
+    )
+
+    assert result == [450.0, 480.0]
+    mock_search.assert_called_once_with(
+        "i5-10400F GTX 1650 Super 16Go ddr4 512Go ssd", "tok"
+    )
+
+
+@patch("ebay_client.search_used_prices")
+@patch("ebay_client.get_access_token")
+def test_search_similar_used_pc_prices_omits_gpu_when_not_given(mock_token, mock_search):
+    mock_token.return_value = "tok"
+    mock_search.return_value = []
+
+    search_similar_used_pc_prices("i5-10400F", 16, "ddr4", 512, "ssd", "", "id", "secret")
+
+    mock_search.assert_called_once_with("i5-10400F 16Go ddr4 512Go ssd", "tok")
+
+
+@patch("ebay_client.get_access_token", side_effect=Exception("network error"))
+def test_search_similar_used_pc_prices_returns_empty_list_on_failure(mock_token):
+    result = search_similar_used_pc_prices(
+        "i5-10400F", 16, "ddr4", 512, "ssd", "GTX 1650 Super", "id", "secret"
+    )
+    assert result == []

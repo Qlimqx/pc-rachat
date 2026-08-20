@@ -121,3 +121,87 @@ def test_format_pricing_grid_renders_sell_and_buy_tiers():
     assert "neuf -30% : 300.00€" in output
     assert "jusqu'à 40.00€ 🔥 Très bonne affaire" in output
     assert "au-delà de 100.00€ ❌ Je passe" in output
+
+
+from cli import format_similar_used_price, make_similar_used_search_fn
+
+
+def test_format_similar_used_price_renders_value_and_method():
+    result = format_similar_used_price(
+        {"value": 480.0, "method": "médiane sur 3 annonces d'occasion similaires"}
+    )
+
+    assert result == "Configs d'occasion similaires : 480.00€ (médiane sur 3 annonces d'occasion similaires)"
+
+
+def test_format_similar_used_price_handles_none():
+    result = format_similar_used_price(None)
+
+    assert result == "Configs d'occasion similaires : aucune annonce comparable trouvée."
+
+
+def test_make_ebay_used_ram_fn_returns_empty_list_without_credentials():
+    from cli import make_ebay_used_ram_fn
+
+    search_fn = make_ebay_used_ram_fn(None, None)
+
+    assert search_fn(16, "ddr4") == []
+
+
+def test_make_ebay_used_ram_fn_calls_ebay_client_with_credentials():
+    from unittest.mock import patch
+
+    from cli import make_ebay_used_ram_fn
+
+    with patch("cli.ebay_client.search_used_ram_prices") as mock_search:
+        mock_search.return_value = [90.0, 100.0]
+        search_fn = make_ebay_used_ram_fn("id", "secret")
+
+        result = search_fn(16, "ddr4")
+
+        assert result == [90.0, 100.0]
+        mock_search.assert_called_once_with(16, "ddr4", "id", "secret")
+
+
+def test_make_ebay_used_storage_fn_returns_empty_list_without_credentials():
+    from cli import make_ebay_used_storage_fn
+
+    search_fn = make_ebay_used_storage_fn(None, None)
+
+    assert search_fn(512, "ssd") == []
+
+
+def test_make_ebay_used_storage_fn_calls_ebay_client_with_credentials():
+    from unittest.mock import patch
+
+    from cli import make_ebay_used_storage_fn
+
+    with patch("cli.ebay_client.search_used_storage_prices") as mock_search:
+        mock_search.return_value = [30.0, 40.0]
+        search_fn = make_ebay_used_storage_fn("id", "secret")
+
+        result = search_fn(512, "ssd")
+
+        assert result == [30.0, 40.0]
+        mock_search.assert_called_once_with(512, "ssd", "id", "secret")
+
+
+def test_make_similar_used_search_fn_returns_empty_list_without_credentials():
+    search_fn = make_similar_used_search_fn(None, None)
+
+    assert search_fn("cpu", 16, "ddr4", 512, "ssd", "gpu") == []
+
+
+def test_make_similar_used_search_fn_calls_ebay_client_with_credentials():
+    from unittest.mock import patch
+
+    with patch("cli.ebay_client.search_similar_used_pc_prices") as mock_search:
+        mock_search.return_value = [450.0, 480.0]
+        search_fn = make_similar_used_search_fn("id", "secret")
+
+        result = search_fn("i5-10400F", 16, "ddr4", 512, "ssd", "GTX 1650 Super")
+
+        assert result == [450.0, 480.0]
+        mock_search.assert_called_once_with(
+            "i5-10400F", 16, "ddr4", 512, "ssd", "GTX 1650 Super", "id", "secret"
+        )

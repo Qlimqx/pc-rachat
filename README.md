@@ -6,7 +6,7 @@ L'estimation combine :
 - pour le CPU et le GPU : une recherche de **prix neuf** en priorité (médiane sur 7 revendeurs français — LDLC, PcComponentes, Materiel.net, TopAchat, Grosbill, Rue du Commerce, Amazon), avec repli sur l'**eBay Browse API** (annonces d'occasion, médiane des prix trouvés) si aucun revendeur ne trouve le modèle neuf, puis sur une **table de référence locale** (`data/reference_prices.json`) en tout dernier recours
 - pour la RAM et le stockage : une recherche de **prix marché** (médiane sur eBay + les mêmes 7 revendeurs), avec repli sur une **formule €/Go** (`data/component_rates.json`) si aucune source ne trouve de résultat
 
-Le résultat donne le détail par composant et un total. La marge de revente et l'ajustement selon l'état du PC restent à ta charge — l'outil n'estime que la valeur marché des pièces.
+Le résultat donne le détail par composant et un total, la grille d'achat/revente basée sur le prix neuf équivalent, et à titre de référence le prix constaté sur des configs d'occasion comparables (même CPU/GPU/RAM/stockage, recherche eBay). La marge de revente et l'ajustement selon l'état du PC restent à ta charge — l'outil n'estime que la valeur marché des pièces.
 
 ## Installation
 

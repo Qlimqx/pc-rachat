@@ -23,6 +23,7 @@ def index():
     buy_grid = None
     sell_grid = None
     new_pc_price = None
+    similar_used_result = None
     error = None
     form_values = None
 
@@ -53,12 +54,16 @@ def index():
             storage_search_fns = sourcing.make_storage_search_fn(client_id, client_secret)
             cpu_search_fns = sourcing.make_cpu_search_fn()
             gpu_search_fns = sourcing.make_gpu_search_fn()
+            similar_used_search_fn = cli_helpers.make_similar_used_search_fn(client_id, client_secret)
+            ram_used_search_fn = cli_helpers.make_ebay_used_ram_fn(client_id, client_secret)
+            storage_used_search_fn = cli_helpers.make_ebay_used_storage_fn(client_id, client_secret)
 
-            # estimate_pc and estimate_new_pc_price each do their own
-            # independent network searches -- run them concurrently instead
-            # of one after the other so a single request's wall time is
-            # bounded by the slower of the two, not their sum.
-            with ThreadPoolExecutor(max_workers=2) as executor:
+            # estimate_pc, estimate_new_pc_price and estimate_similar_used_price
+            # each do their own independent network searches -- run them
+            # concurrently instead of one after the other so a single
+            # request's wall time is bounded by the slowest of the three,
+            # not their sum.
+            with ThreadPoolExecutor(max_workers=3) as executor:
                 result_future = executor.submit(
                     estimator.estimate_pc,
                     cpu_model=cpu_model,
@@ -74,15 +79,22 @@ def index():
                     storage_search_fns=storage_search_fns,
                     cpu_search_fns=cpu_search_fns,
                     gpu_search_fns=gpu_search_fns,
+                    ram_used_search_fn=ram_used_search_fn,
+                    storage_used_search_fn=storage_used_search_fn,
                 )
                 new_pc_future = executor.submit(
                     estimator.estimate_new_pc_price, cpu_model, gpu_model, new_pc_search_fns
                 )
+                similar_used_future = executor.submit(
+                    estimator.estimate_similar_used_price,
+                    cpu_model, ram_go, ram_type, storage_go, storage_type, gpu_model, similar_used_search_fn,
+                )
                 result = result_future.result()
                 new_pc_result = new_pc_future.result()
+                similar_used_result = similar_used_future.result()
             if new_pc_result is not None:
                 new_pc_price = new_pc_result["value"]
-                sell_grid = estimator.estimate_sell_grid(new_pc_price, sell_tiers)
+                sell_grid = estimator.estimate_sell_grid(new_pc_price, sell_tiers, result["total"])
                 buy_grid = estimator.estimate_buy_grid(
                     sell_grid[0]["price"], buy_tiers, buy_margin["min_margin_pct"]
                 )
@@ -93,6 +105,7 @@ def index():
         buy_grid=buy_grid,
         sell_grid=sell_grid,
         new_pc_price=new_pc_price,
+        similar_used_result=similar_used_result,
         error=error,
         form_values=form_values,
         cpu_models=CPU_MODELS,
