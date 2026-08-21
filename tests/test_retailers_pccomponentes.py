@@ -4,11 +4,17 @@ from urllib.parse import unquote
 from retailers.pccomponentes import search_prices
 
 
-EXPECTED_PRICES = [1291.2, 1297.8, 1264.83, 1242.4, 2710.19, 1548.39, 1465.3]
+EXPECTED_PRICES = [1291.2, 1264.83]
 
 
 @patch("retailers.pccomponentes.requests.get")
 def test_search_prices_extracts_prices_from_real_fixture(mock_get):
+    # The fixture's 7 raw results include 2 wrong-variant "RTX 4060 Ti"
+    # listings and 3 wrong-CPU "Ryzen 7 5800X" listings that title_filter
+    # now correctly excludes (independently verified against the fixture
+    # HTML) -- only the 2 listings genuinely containing both "Ryzen 7 5700X"
+    # and plain "RTX 4060" remain. Before title_filter was added here, all 7
+    # counted at face value.
     with open("tests/fixtures/pccomponentes_search.html", encoding="utf-8") as f:
         html = f.read()
 
@@ -27,6 +33,21 @@ def test_search_prices_extracts_prices_from_real_fixture(mock_get):
 @patch("retailers.pccomponentes.requests.get", side_effect=Exception("network error"))
 def test_search_prices_returns_empty_list_on_network_failure(mock_get):
     assert search_prices("Ryzen 7 5700X", "RTX 4060") == []
+
+
+def test_search_prices_returns_empty_list_when_no_gpu_matches():
+    with patch("retailers.pccomponentes.requests.get") as mock_get:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = (
+            '<a data-product-name="PC Gamer Intel Core i5-10400F 16 Go GTX 1650" '
+            'data-product-price="863.88"></a>'
+        )
+        mock_get.return_value = mock_response
+
+        # GTX 1650 Super is a different (non-existent-in-this-listing)
+        # variant from the plain "GTX 1650" in the card -- must not match.
+        assert search_prices("i5-10400F", "GTX 1650 Super") == []
 
 
 @patch("retailers.pccomponentes.requests.get")

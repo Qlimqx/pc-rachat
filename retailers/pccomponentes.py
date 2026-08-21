@@ -105,7 +105,26 @@ def search_prices(cpu_model, gpu_model):
     # returned 7 matching PC builds that actually contain both parts,
     # versus a broader "PC gamer RTX 4060" query which returned PCs
     # with unrelated CPUs. So, unlike LDLC, we keep both models.
-    return _search(f"{cpu_model} {gpu_model}")
+    #
+    # That "highly relevant" finding doesn't generalize, though (same
+    # pattern found elsewhere this session): verified live for
+    # "i5-10400F GTX 1650 Super", this query returns 40 results of which
+    # only 1 is even close (a plain "GTX 1650", not the requested Super
+    # variant), the other 39 spanning unrelated CPUs (i5-11400F,
+    # i5-12400F, Ryzen 5 5500, i3-10100F, i5-14600KF...), unrelated GPUs
+    # (RTX 3050/3060/4060 Ti/5060/5070, GT 1030), refurbished laptops with
+    # a completely different CPU (i5-10310U), and even a single bare CPU
+    # listing (315EUR, not a PC at all). No relevance filtering was applied
+    # here even though this file already has _title_matches_model (used by
+    # search_cpu_prices/search_gpu_prices) -- requiring BOTH models to
+    # genuinely appear in data-product-name fixes it, mirroring
+    # amazon.py/rueducommerce.py's AND-filtered search_prices.
+    return _search(
+        f"{cpu_model} {gpu_model}",
+        title_filter=lambda name: (
+            _title_matches_model(name, cpu_model) and _title_matches_model(name, gpu_model)
+        ),
+    )
 
 
 def search_ram_prices(ram_go, ram_type):

@@ -138,6 +138,26 @@ def _search(query, title_filter=None):
         return []
 
 
+def _is_complete_new_pc(title, desc):
+    # Distinguishes a genuine complete, ready-to-use PC (desktop tower or
+    # laptop) from a standalone GPU card that leaked into the same "PC gamer
+    # {gpu}" result set (see search_prices below). Verified live against a
+    # real "PC gamer RTX 5070 Ti" response: every one of the complete-PC
+    # cards (desktop "PC Gamer <name>" builds and gaming laptops from
+    # MSI/Gigabyte/Asus/Acer alike) mentions "Win11"/"Windows 11" in its
+    # <.c-product__description> spec blurb, while every standalone-card
+    # entry that also matched the GPU model (e.g. "Gainward GeForce RTX 5070
+    # Ti Phoenix-S") describes only the card's own specs ("GeForce RTX 5070
+    # Ti, PCI-Express 16x, 16 Go GDDR7, ...") with no OS mention at all -- a
+    # clean split, same pattern as ldlc.py (shared platform, same behavior).
+    if not title or "occasion" in title.lower():
+        return False
+    if not desc:
+        return False
+    desc_lower = desc.lower()
+    return "win" in desc_lower and "sans win" not in desc_lower
+
+
 def search_prices(cpu_model, gpu_model):
     # Verified live: Materiel.net's search does strict AND-matching, just
     # like LDLC (both are part of the LDLC Group and share the same
@@ -148,7 +168,52 @@ def search_prices(cpu_model, gpu_model):
     # returns a full page of complete gaming-PC listings (208 results),
     # mirroring the query shape already validated for LDLC, so we reuse
     # it here and never leak the CPU model into the query.
-    return _search(f"PC gamer {gpu_model}")
+    #
+    # Real coherence bugs found live, all with the same root cause -- this
+    # query had no relevance filtering of its own. With no GPU given, "PC
+    # gamer {gpu}" collapses to an unanchored "PC gamer " query (verified
+    # live for "i7-8700" + no GPU: 48 unrelated prices, 348,99EUR-3449,95EUR
+    # range); a CPU-anchored "PC gamer i7-8700" doesn't help either (verified
+    # live: all 48 results were "Reconditionné" refurbished office desktops
+    # with cryptic model-code titles, no real CPU verification possible).
+    # With an old/discontinued GPU given, the same loose-ranking noise shows
+    # up (verified live for "GTX 1650 Super": 18 scattered prices from
+    # 19,95EUR to 899,95EUR).
+    #
+    # Titles never contain the GPU model for the complete-PC listings here
+    # either (e.g. "PC Gamer Werewolf - Win11 installé (version d'essai)"),
+    # so like ldlc.py the model check runs against the description instead,
+    # which spells it out in full ("NVIDIA GeForce RTX 5070 Ti, AMD Ryzen 7
+    # 9800X3D, ..."). _is_complete_new_pc additionally keeps standalone GPU
+    # cards (which DO name the GPU in their own title) from being counted as
+    # if they were a whole PC's price.
+    if not gpu_model:
+        return []
+    try:
+        url = SEARCH_URL.format(query=requests.utils.quote(f"PC gamer {gpu_model}"))
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        prices = []
+        for card in soup.select("li.c-products-list__item"):
+            title_el = card.select_one(".c-product__title")
+            title = title_el.get_text(strip=True) if title_el else ""
+            desc_el = card.select_one(".c-product__description")
+            desc = desc_el.get_text(strip=True) if desc_el else ""
+            if not _is_complete_new_pc(title, desc):
+                continue
+            if not _title_matches_model(desc, gpu_model):
+                continue
+            price_el = card.select_one(".o-product__price:not(.o-product__cut-price)")
+            if price_el is None:
+                continue
+            price = _extract_price(_price_text(price_el))
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
 
 
 def search_ram_prices(ram_go, ram_type):

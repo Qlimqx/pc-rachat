@@ -106,11 +106,92 @@ def _search(query, title_filter=None):
         return []
 
 
+def _is_complete_new_pc(title, desc):
+    # Distinguishes a genuine complete, ready-to-use PC (desktop tower or
+    # laptop) from a standalone component card that leaked into the same
+    # "PC gamer {gpu}" result set (see search_prices below). Verified live
+    # against a real "PC gamer RTX 5070 Ti" response: every one of the 17
+    # genuine complete-PC cards (10 LDLC-branded towers + 7 gaming laptops
+    # from MSI/Gigabyte/ASUS/Acer) has a "Windows" mention in its <p.desc>
+    # spec blurb ("... Windows 11 Famille", "... Windows 11 Professionnel"),
+    # while all 12 standalone-GPU-card entries that also matched the GPU
+    # model (e.g. "Gainward GeForce RTX 5070 Ti Phoenix-S") describe only
+    # the card's own specs ("16 Go GDDR7 - HDMI/Tri DisplayPort - ...") with
+    # no OS mention at all -- a clean 100%/0% split. One LDLC-specific
+    # gotcha: some of LDLC's own tower SKUs are sold unassembled/OS-less,
+    # worded "(sans Windows - non monté)" -- that phrase still contains the
+    # substring "windows", so it's excluded explicitly rather than treated
+    # as a match; the assembled/with-Windows SKU for the same build is a
+    # separate card that passes normally.
+    if not title or "occasion" in title.lower():
+        return False
+    if not desc:
+        return False
+    desc_lower = desc.lower()
+    return "windows" in desc_lower and "sans windows" not in desc_lower
+
+
 def search_prices(cpu_model, gpu_model):
     # LDLC's search does strict AND-matching; including both CPU and GPU model
     # returns almost nothing (verified during research), so we search by GPU
-    # + a generic "PC gamer" term instead
-    return _search(f"PC gamer {gpu_model}")
+    # + a generic "PC gamer" term instead.
+    #
+    # Real coherence bugs found live, all with the same root cause -- this
+    # query has no relevance filtering of its own, unlike
+    # search_cpu_prices/search_gpu_prices:
+    # 1. No GPU given: the query collapses to an unanchored "PC gamer "
+    #    (trailing space, no GPU term at all). Verified live for an
+    #    "i7-8700" + no-GPU build: returned 46 completely unrelated
+    #    "PC gamer" prices ranging 87,95EUR-2599,95EUR, none actually
+    #    related to the requested CPU. No CPU-anchored alternative works
+    #    either (verified live: "PC gamer i7-8700" returns refurbished
+    #    office desktops with cryptic model-code titles that don't verify
+    #    the CPU at all) -- there's no safe query without a GPU to anchor
+    #    to, so this source is skipped entirely in that case.
+    # 2. Old/discontinued GPU: even with a GPU given, "PC gamer {gpu}"
+    #    returns loosely-ranked catalog-wide noise when no current prebuilt
+    #    actually pairs with that GPU. Verified live for "GTX 1650 Super":
+    #    46 wildly scattered prices from 15,95EUR to 1399,95EUR, clearly not
+    #    "PC gamer" prices at all.
+    # 3. Standalone components leaking in even for a genuinely in-stock GPU:
+    #    the same "PC gamer {gpu}" query also returns bare graphics cards
+    #    that merely mention the GPU (verified live for "RTX 5070 Ti": 12 of
+    #    29 results were standalone cards at 764-1599EUR, not complete PCs),
+    #    which would silently mislabel a GPU's own price as a whole PC's
+    #    price. _is_complete_new_pc filters those out.
+    #
+    # Titles never contain the GPU model for LDLC's own branded PC lines
+    # (verified live -- e.g. "LDLC PC11 Zen-M5 X3D Plus Perfect Seven-Ti"),
+    # so unlike search_cpu_prices/search_gpu_prices the model check here
+    # runs against the <p.desc> spec blurb, which does spell it out in full
+    # (e.g. "... NVIDIA GeForce RTX 5070 Ti 16 Go ...").
+    if not gpu_model:
+        return []
+    try:
+        url = SEARCH_URL.format(query=requests.utils.quote(f"PC gamer {gpu_model}"))
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        prices = []
+        for card in soup.select("li.pdt-item"):
+            title_el = card.select_one("h3.title-3")
+            title = title_el.get_text(strip=True) if title_el else ""
+            desc_el = card.select_one("p.desc")
+            desc = desc_el.get_text(strip=True) if desc_el else ""
+            if not _is_complete_new_pc(title, desc):
+                continue
+            if not _title_matches_model(desc, gpu_model):
+                continue
+            price_el = card.select_one(".price .price")
+            if price_el is None:
+                continue
+            price = _extract_price(_price_text(price_el))
+            if price is not None:
+                prices.append(price)
+        return prices
+    except Exception:
+        return []
 
 
 def search_ram_prices(ram_go, ram_type):

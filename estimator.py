@@ -206,15 +206,24 @@ def _round2(value):
 def estimate_sell_grid(new_pc_price, discount_percentages, floor):
     # Each entry is "neuf minus X%" (a discount off the new-PC price), not a
     # straight percentage of it -- e.g. pct=0.10 means 90% of new_pc_price.
-    # floor is the component-breakdown total (estimate_pc's "total") -- the
-    # cost of buying the same parts separately. Without this clamp, an
-    # aggressive discount tier can undercut that total (observed live: a
-    # Ryzen 7 5700X + RTX 4060 build's neuf-30% tier came out to 1084.93€,
-    # BELOW its 1099.92€ component total), which recommends asking less for
-    # the whole PC than the parts alone are worth -- incoherent, since
-    # parting it out would then beat selling it whole.
+    # Every tier is clamped to the range [floor, new_pc_price]:
+    # - floor (estimate_pc's "total") is the cost of buying the same parts
+    #   separately. Without this lower clamp, an aggressive discount tier can
+    #   undercut that total (observed live: a Ryzen 7 5700X + RTX 4060
+    #   build's neuf-30% tier came out to 1084.93€, BELOW its 1099.92€
+    #   component total), recommending less for the whole PC than the parts
+    #   alone are worth.
+    # - new_pc_price is the upper clamp: a resale price must always stay
+    #   cheaper than "neuf" by definition. Without this, a floor that
+    #   exceeds new_pc_price (component prices and the new-PC-bundle search
+    #   are two independent, occasionally conflicting data sources) pushed
+    #   every tier up to the floor -- observed live as a "prix neuf" of
+    #   700€ next to a "prix de revente" of 900€, backwards. When floor
+    #   itself exceeds new_pc_price, every tier collapses to new_pc_price
+    #   (the strictest constraint that still holds is "never more than
+    #   neuf").
     return [
-        {"pct": pct, "price": max(_round2(new_pc_price * (1 - pct)), floor)}
+        {"pct": pct, "price": min(max(_round2(new_pc_price * (1 - pct)), floor), new_pc_price)}
         for pct in discount_percentages
     ]
 

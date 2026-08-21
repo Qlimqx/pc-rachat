@@ -10,18 +10,17 @@ from retailers.materiel_net import (
 )
 
 
-EXPECTED_PRICES = [
-    1349.96, 3449.95, 1469.95, 1299.95, 1299.95, 1469.95, 3049.95, 2849.95,
-    1849.95, 7799.95, 1199.95, 1379.95, 1319.95, 3099.95, 899.95, 1219.95,
-    1769.95, 1999.95, 2549.95, 4199.95, 1199.95, 1049.95, 3149.95, 1599.95,
-    1349.95, 3599.95, 2049.95, 2599.95, 2079.95, 8999.95, 2249.95, 3149.95,
-    1849.95, 1379.95, 2799.95, 2899.95, 3449.95, 1299.95, 2949.95, 2449.95,
-    1199.95, 1649.95, 5299.96, 2949.95, 2929.95, 1299.95, 1399.95, 3349.95,
-]
-
-
 @patch("retailers.materiel_net.requests.get")
 def test_search_prices_extracts_prices_from_real_fixture(mock_get):
+    # This fixture was captured for a "PC gamer RTX 4060" query, but
+    # inspecting it directly shows only ONE of the 48 cards' descriptions
+    # genuinely mentions "RTX 4060" at all -- a used ("- Occasion") laptop,
+    # which must not count as a new-market price. Every other card is
+    # unrelated (different GPU generation or a laptop with a different GPU).
+    # So an empty result is the verified-correct outcome here, not a
+    # regression: the previous 48-value EXPECTED_PRICES (removed) was
+    # unknowingly asserting on GPU-mismatched noise, from back before this
+    # function had any relevance filtering at all.
     with open("tests/fixtures/materiel_net_search.html", encoding="utf-8") as f:
         html = f.read()
 
@@ -32,14 +31,70 @@ def test_search_prices_extracts_prices_from_real_fixture(mock_get):
 
     prices = search_prices("Ryzen 7 5700X", "RTX 4060")
 
-    assert isinstance(prices, list)
-    assert all(isinstance(p, float) for p in prices)
-    assert prices == EXPECTED_PRICES
+    assert prices == []
 
 
 @patch("retailers.materiel_net.requests.get", side_effect=Exception("network error"))
 def test_search_prices_returns_empty_list_on_network_failure(mock_get):
     assert search_prices("Ryzen 7 5700X", "RTX 4060") == []
+
+
+def test_search_prices_returns_empty_list_without_making_a_request_when_no_gpu():
+    with patch("retailers.materiel_net.requests.get") as mock_get:
+        assert search_prices("i7-8700", "") == []
+        mock_get.assert_not_called()
+
+
+def _pc_card(title, desc, price="2999,95"):
+    return f"""
+    <li class="c-products-list__item">
+        <h2 class="c-product__title">{title}</h2>
+        <p class="c-product__description">{desc}</p>
+        <span class="o-product__price">{price.split(",")[0]}<sup>{price.split(",")[1]}</sup></span>
+    </li>
+    """
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_prices_accepts_a_genuine_complete_pc(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = _pc_card(
+        "PC Gamer Permafrost - Win11 installé (version d'essai)",
+        "NVIDIA GeForce RTX 5070 Ti, AMD Ryzen 7 9800X3D, 32 Go DDR5, SSD NVMe 1 To, Win11 version d'essai",
+        "2499,95",
+    )
+    mock_get.return_value = mock_response
+
+    assert search_prices("Ryzen 7 9800X3D", "RTX 5070 Ti") == [2499.95]
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_prices_rejects_a_standalone_gpu_card(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = _pc_card(
+        "Gainward GeForce RTX 5070 Ti Phoenix-S",
+        "GeForce RTX 5070 Ti, PCI-Express 16x, 16 Go GDDR7, DLSS 4, HDMI / 3x DisplayPort",
+        "1199,95",
+    )
+    mock_get.return_value = mock_response
+
+    assert search_prices("Ryzen 7 9800X3D", "RTX 5070 Ti") == []
+
+
+@patch("retailers.materiel_net.requests.get")
+def test_search_prices_rejects_an_occasion_listing(mock_get):
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = _pc_card(
+        "Asus ROG Strix G16 G614PR - Occasion",
+        "PC portable gamer 16\", AMD Ryzen 9, RTX 5070 Ti, RAM 16 Go, SSD 1 To, Windows 11, AZERTY",
+        "1899,95",
+    )
+    mock_get.return_value = mock_response
+
+    assert search_prices("Ryzen 7 9800X3D", "RTX 5070 Ti") == []
 
 
 @patch("retailers.materiel_net.requests.get")

@@ -560,6 +560,30 @@ def test_estimate_sell_grid_floor_does_not_affect_tiers_already_above_it():
     assert result == [{"pct": 0.10, "price": 900.0}]
 
 
+def test_estimate_sell_grid_never_exceeds_the_new_price_even_when_floor_is_higher():
+    # Regression test: live-reported bug -- a component floor (900€) higher
+    # than the new-PC price (700€) pushed every sell tier up to 900€, i.e. a
+    # "prix de revente" MORE expensive than the "prix neuf" it's supposed to
+    # be a discount off of. A resale price must never exceed the new price.
+    result = estimate_sell_grid(700.0, [0.10, 0.20, 0.30], floor=900.0)
+
+    assert result == [
+        {"pct": 0.10, "price": 700.0},
+        {"pct": 0.20, "price": 700.0},
+        {"pct": 0.30, "price": 700.0},
+    ]
+
+
+def test_estimate_sell_grid_ceiling_does_not_affect_tiers_already_below_new_price():
+    result = estimate_sell_grid(1549.90, [0.10, 0.20, 0.30], floor=1099.92)
+
+    assert result == [
+        {"pct": 0.10, "price": 1394.91},
+        {"pct": 0.20, "price": 1239.92},
+        {"pct": 0.30, "price": 1099.92},
+    ]
+
+
 from estimator import estimate_buy_grid
 
 
